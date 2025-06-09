@@ -1,0 +1,4 @@
+repository "ThrowSlipperGame 2025-06-09_19-26-01/ThrowSlipperGame@18966724688486@cloud"
+  path "/"
+    br "/main"
+    co "/main"

@@ -1,0 +1,40 @@
+[Libraries]
+[Libraries]/
+Library/
+Temp/
+Obj/
+Build/
+Builds/
+Logs/
+MemoryCaptures/
+UserSettings/
+
+# Avoid large cache folders
+Packages/manifest.json
+Packages/packages-lock.json
+
+# Project settings
+ProjectSettings/
+
+# Ignore VS and JetBrains files
+.vscode/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+
+# Ignore crash logs
+sysinfo.txt
+
+# Auto-generated files
+*.apk
+*.aab
+*.app
