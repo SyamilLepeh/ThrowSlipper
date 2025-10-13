@@ -1,142 +1,101 @@
-using UnityEngine;
+﻿using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class PlayerController : MonoBehaviour
 {
-    Animator animator;
-    float velocityZ = 0.0f;
-    float velocityX = 0.0f;
+    [Header("References")]
+    private Animator animator;
+
+    [Header("Movement Settings")]
     public float acceleration = 2.0f;
     public float deceleration = 2.0f;
     public float maximumWalkVelocity = 0.5f;
     public float maximumRunVelocity = 2.0f;
+    public float throwLayerBlendSpeed = 5.0f;
 
-    int VelocityZHash;
-    int VelocityXHash;
+    [Header("Input Actions")]
+    public InputActionReference moveAction; // Vector2 (WASD or Left Stick)
+    public InputActionReference runAction;  // Button (Left Shift or Controller Trigger)
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
+    private float speed = 0.0f;
+    private int SpeedHash;
+    private int IsThrowingHash;
+    private int IsThrowingFullHash;
+
+    private float throwLayerWeight = 0f;
+    private int throwLayerIndex;
+
     void Start()
     {
         animator = GetComponent<Animator>();
+        SpeedHash = Animator.StringToHash("Speed");
+        IsThrowingHash = Animator.StringToHash("isThrowing");
+        IsThrowingFullHash = Animator.StringToHash("isThrowingFull");
 
-        VelocityZHash = Animator.StringToHash("Velocity Z");
-        VelocityXHash = Animator.StringToHash("Velocity X");
+        throwLayerIndex = animator.GetLayerIndex("ThrowLayer");
+        animator.SetLayerWeight(throwLayerIndex, 0f);
     }
 
-    void changeVelocity(bool forwardPressed, bool leftPressed, bool rightPressed, bool runPressed, float currentMaxVelocity)
+    void OnEnable()
     {
-        if (forwardPressed && velocityZ < currentMaxVelocity)
-        {
-            velocityZ += Time.deltaTime * acceleration;
-        }
-
-        if (leftPressed && velocityX > -currentMaxVelocity)
-        {
-            velocityX -= Time.deltaTime * acceleration;
-        }
-
-        if (rightPressed && velocityX < currentMaxVelocity)
-        {
-            velocityX += Time.deltaTime * acceleration;
-        }
-
-        if (!forwardPressed && velocityZ > 0.0f)
-        {
-            velocityZ -= Time.deltaTime * deceleration;
-        }
-
-        if (!leftPressed && velocityX < 0.0f)
-        {
-            velocityX += Time.deltaTime * deceleration;
-        }
-
-        if (!rightPressed && velocityX > 0.0f)
-        {
-            velocityX -= Time.deltaTime * deceleration;
-        }
+        moveAction.action.Enable();
+        runAction.action.Enable();
     }
 
-    void lockOrResetVelocity(bool forwardPressed, bool leftPressed, bool rightPressed, bool runPressed, float currentMaxVelocity)
+    void OnDisable()
     {
-        if (!forwardPressed && velocityZ < 0.0f)
-        {
-            velocityZ = 0.0f;
-        }
-
-
-        if (!leftPressed && !rightPressed && velocityX != 0.0f && (velocityX > -0.05f && velocityX < 0.05f))
-        {
-            velocityX = 0.0f;
-        }
-
-        if (forwardPressed && runPressed && velocityZ > currentMaxVelocity)
-        {
-            velocityZ = currentMaxVelocity;
-        }
-        else if (forwardPressed && velocityZ > currentMaxVelocity)
-        {
-            velocityZ -= Time.deltaTime * deceleration;
-
-            if (velocityZ > currentMaxVelocity && velocityZ < (currentMaxVelocity + 0.05))
-            {
-                velocityZ = currentMaxVelocity;
-            }
-        }
-        else if (forwardPressed && velocityZ < currentMaxVelocity && velocityZ > (currentMaxVelocity - 0.05f))
-        {
-            velocityZ = currentMaxVelocity;
-        }
-
-        if (leftPressed && runPressed && velocityX < -currentMaxVelocity)
-        {
-            velocityX = -currentMaxVelocity;
-        }
-        else if (leftPressed && velocityX < -currentMaxVelocity)
-        {
-            velocityX += Time.deltaTime * deceleration;
-
-            if (velocityX < -currentMaxVelocity && velocityX > (-currentMaxVelocity - 0.05f))
-            {
-                velocityX = -currentMaxVelocity;
-            }
-        }
-        else if (leftPressed && velocityX > -currentMaxVelocity && velocityX < (-currentMaxVelocity + 0.05f))
-        {
-            velocityX = -currentMaxVelocity;
-        }
-
-        if (rightPressed && runPressed && velocityX > currentMaxVelocity)
-        {
-            velocityX = currentMaxVelocity;
-        }
-        else if (rightPressed && velocityX > currentMaxVelocity)
-        {
-            velocityX -= Time.deltaTime * deceleration;
-
-            if (velocityX > currentMaxVelocity && velocityX < (-currentMaxVelocity - 0.05))
-            {
-                velocityX = currentMaxVelocity;
-            }
-        }
-        else if (rightPressed && velocityX < currentMaxVelocity && velocityX > (currentMaxVelocity + 0.05f))
-        {
-            velocityX = currentMaxVelocity;
-        }
+        moveAction.action.Disable();
+        runAction.action.Disable();
     }
 
-    // Update is called once per frame
     void Update()
     {
-        bool forwardPressed = Input.GetKey(KeyCode.W);
-        bool leftPressed = Input.GetKey(KeyCode.A);
-        bool rightPressed = Input.GetKey(KeyCode.D);
-        bool runPressed = Input.GetKey(KeyCode.LeftShift);
+        // === INPUT ===
+        Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
+        bool runPressed = runAction.action.IsPressed();
+        bool throwPressed = Mouse.current.leftButton.wasPressedThisFrame;
 
         float currentMaxVelocity = runPressed ? maximumRunVelocity : maximumWalkVelocity;
 
-        changeVelocity(forwardPressed, leftPressed, rightPressed, runPressed, currentMaxVelocity);
-        lockOrResetVelocity(forwardPressed, leftPressed, rightPressed, runPressed, currentMaxVelocity);
+        // === MOVEMENT SPEED ===
+        float targetSpeed = moveInput.magnitude * currentMaxVelocity;
+        float currentSpeed = Mathf.MoveTowards(animator.GetFloat(SpeedHash), targetSpeed, Time.deltaTime * acceleration);
+        animator.SetFloat(SpeedHash, currentSpeed);
 
-        animator.SetFloat(VelocityZHash, velocityZ);
-        animator.SetFloat(VelocityXHash, velocityX);
+        // === ROTATION ===
+        if (moveInput != Vector2.zero)
+        {
+            Vector3 direction = new Vector3(moveInput.x, 0, moveInput.y);
+            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(direction), Time.deltaTime * 10f);
+        }
+
+        // === THROW LOGIC ===
+        bool isMoving = moveInput != Vector2.zero;
+
+        if (throwPressed)
+        {
+            if (isMoving)
+                animator.SetBool(IsThrowingHash, true);  // upper body throw
+            else
+                animator.SetBool(IsThrowingFullHash, true); // full body throw
+        }
+
+        // === LAYER BLENDING ===
+        if (animator.GetBool(IsThrowingHash))
+            throwLayerWeight = Mathf.MoveTowards(throwLayerWeight, 1f, Time.deltaTime * throwLayerBlendSpeed);
+        else
+            throwLayerWeight = Mathf.MoveTowards(throwLayerWeight, 0f, Time.deltaTime * throwLayerBlendSpeed);
+
+        animator.SetLayerWeight(throwLayerIndex, throwLayerWeight);
+
+        // === RESET THROW STATES ===
+        AnimatorStateInfo throwState = animator.GetCurrentAnimatorStateInfo(throwLayerIndex);
+        AnimatorStateInfo baseState = animator.GetCurrentAnimatorStateInfo(0);
+
+        if (throwState.IsName("Throw_Run") && throwState.normalizedTime >= 0.95f)
+            animator.SetBool(IsThrowingHash, false);
+
+        if (baseState.IsName("ThrowFullBody") && baseState.normalizedTime >= 0.95f)
+            animator.SetBool(IsThrowingFullHash, false);
     }
 }

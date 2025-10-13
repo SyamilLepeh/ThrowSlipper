@@ -131,6 +131,7 @@ GameObject:
   - component: {fileID: 89204677}
   - component: {fileID: 89204676}
   - component: {fileID: 89204679}
+  - component: {fileID: 89204680}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -205,8 +206,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 89204675}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.11020491, y: -0, z: -0, w: 0.99390894}
-  m_LocalPosition: {x: 0, y: 4.5, z: -7.53}
+  m_LocalRotation: {x: 0.11020267, y: 0, z: 0, w: 0.9939092}
+  m_LocalPosition: {x: 0, y: 5.5, z: -8.68}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -256,6 +257,23 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
+--- !u!114 &89204680
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 89204675}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b74c010b0b4e254498ae40770728f67, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CameraFollow
+  player: {fileID: 1026244638}
+  offset: {x: 0, y: 7, z: -9}
+  smoothSpeed: 0.125
+  rotationSpeed: 5
+  cameraTiltX: 23
 --- !u!1 &582470961
 GameObject:
   m_ObjectHideFlags: 0
@@ -363,7 +381,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 5, y: 5, z: 5}
+  m_LocalScale: {x: 20, y: 5, z: 20}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -373,20 +391,6 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
   m_PrefabInstance: {fileID: 1571668506}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &1026244629
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1026244628}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ddd03f207543fea47935aa33d58e7318, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CharacterMovement
-  moveAction: {fileID: -1680190386980627800, guid: 052faaac586de48259a63d0c4782560b, type: 3}
-  jumpAction: {fileID: -2099379676528639254, guid: 052faaac586de48259a63d0c4782560b, type: 3}
 --- !u!143 &1026244630
 CharacterController:
   m_ObjectHideFlags: 0
@@ -412,20 +416,6 @@ CharacterController:
   m_SkinWidth: 0.08
   m_MinMoveDistance: 0.001
   m_Center: {x: 0, y: 2.2, z: 0}
---- !u!114 &1026244633
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1026244628}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a142e815b82bc2b40aa7a72298123f16, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::AnimationStateController
-  acceleration: 0.1
-  deceleration: 0.1
 --- !u!114 &1026244636
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -442,6 +432,14 @@ MonoBehaviour:
   deceleration: 2
   maximumWalkVelocity: 0.5
   maximumRunVelocity: 2
+  throwLayerBlendSpeed: 5
+  moveAction: {fileID: -1680190386980627800, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  runAction: {fileID: -7471211009204490832, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+--- !u!4 &1026244638 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
+  m_PrefabInstance: {fileID: 1571668506}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1079717168
 GameObject:
   m_ObjectHideFlags: 0
@@ -640,12 +638,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1026244630}
-    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1026244629}
-    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1026244633}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1026244636}
