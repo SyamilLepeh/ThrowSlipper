@@ -207,7 +207,7 @@ Transform:
   m_GameObject: {fileID: 89204675}
   serializedVersion: 2
   m_LocalRotation: {x: 0.11020267, y: 0, z: 0, w: 0.9939092}
-  m_LocalPosition: {x: 0, y: 5.5, z: -8.68}
+  m_LocalPosition: {x: 0, y: 8.89, z: -11.25}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -264,7 +264,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 89204675}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2b74c010b0b4e254498ae40770728f67, type: 3}
   m_Name: 
@@ -405,13 +405,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 32d20442256e16a46bfa86b9f0a329ff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
-  acceleration: 8
-  deceleration: 4
-  maximumWalkVelocity: 2.5
-  maximumRunVelocity: 6
-  throwLayerBlendSpeed: 5
+  acceleration: 60
+  deceleration: 30
+  maximumWalkVelocity: 6.5
+  maximumRunVelocity: 12
+  layerBlendSpeed: 5
+  rotationSpeed: 10
   moveAction: {fileID: -1680190386980627800, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   runAction: {fileID: -7471211009204490832, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  takeAction: {fileID: 1781555164194001046, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  throwAction: {fileID: 1120369429361536294, guid: 052faaac586de48259a63d0c4782560b, type: 3}
 --- !u!4 &1026244638 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
@@ -608,7 +611,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -0
+      value: 0.04
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
       propertyPath: m_LocalPosition.z
