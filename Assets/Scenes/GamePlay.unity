@@ -207,7 +207,7 @@ Transform:
   m_GameObject: {fileID: 89204675}
   serializedVersion: 2
   m_LocalRotation: {x: 0.11020267, y: 0, z: 0, w: 0.9939092}
-  m_LocalPosition: {x: 0, y: 8.89, z: -11.25}
+  m_LocalPosition: {x: 0, y: 7.9, z: -11.25}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -264,18 +264,16 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 89204675}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2b74c010b0b4e254498ae40770728f67, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraFollow
-  cameraMode: 0
   player: {fileID: 1026244638}
-  smoothSpeed: 0.125
-  staticPosition: {x: 0, y: 5, z: -10}
+  offset: {x: 0, y: 11.5, z: -10.5}
+  smoothTime: 0
   lookAtPlayer: 1
-  topDownHeight: 10
-  topDownTilt: 60
+  lookOffset: {x: 0, y: 6, z: 0}
 --- !u!1 &582470961
 GameObject:
   m_ObjectHideFlags: 0
