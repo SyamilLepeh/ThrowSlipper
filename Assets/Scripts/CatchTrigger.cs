@@ -41,44 +41,22 @@ public class CatchTrigger : MonoBehaviour
 
     private void Update()
     {
-        // Prevent pickup if no object nearby
-        if (nearbyObject == null)
+        if (Input.GetKeyDown(KeyCode.E) && nearbyObject != null && !playerController.recentlyThrew)
         {
-            playerController.canPickUp = false;
-            return;
-        }
-
-        // Prevent pickup immediately after throw
-        if (playerController.recentlyThrew)
-        {
-            nearbyObject = null; // remove reference to thrown object
-            playerController.canPickUp = false;
-            return;
-        }
-
-        if (Input.GetKeyDown(KeyCode.E))
-        {
-            if (nearbyObject.IsHeld() || playerController.heldObject != null)
-                return;
-
+            playerController.objectToAttach = nearbyObject; // <-- assign object
             Animator animator = playerController.animator;
             float moveSpeed = animator.GetFloat("Speed");
 
             if (moveSpeed < 0.1f)
-            {
                 animator.SetBool("isTakeObjectFull", true);
-                playerController.heldObject = nearbyObject;
-            }
             else
-            {
-                playerController.AttachObjectToHand(nearbyObject);
                 animator.SetBool("isTakeObject", true);
-            }
 
             nearbyObject = null;
             playerController.canPickUp = false;
         }
     }
+
 
 
 }

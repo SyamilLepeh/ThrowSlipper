@@ -24,11 +24,16 @@ public class PlayerController : MonoBehaviour
     [Header("Object Handling")]
     public ThrowableObject heldObject;
     public Transform rightHand;
-    public float throwForce = 8f;
+    [Tooltip("Time for object to reach the target in seconds")]
+    public float throwTime = 0.8f;
+    [Tooltip("Distance ahead to throw the object")]
+    public float throwDistance = 5f;
+    [Tooltip("Height offset for throw arc")]
+    public float throwHeight = 1f;
 
     [HideInInspector] public bool canPickUp = false;
     [HideInInspector] public bool recentlyThrew = false;
-
+    [HideInInspector] public ThrowableObject objectToAttach;
 
     private int SpeedHash;
     private int IsThrowingHash;
@@ -65,9 +70,8 @@ public class PlayerController : MonoBehaviour
         takeLayerIndex = animator.GetLayerIndex("TakeObjectLayer");
         catchLayerIndex = animator.GetLayerIndex("CatchLayer");
 
-        // ✅ Initialize layer weights properly
         animator.SetLayerWeight(throwLayerIndex, 0f);
-        animator.SetLayerWeight(takeLayerIndex, 0f); 
+        animator.SetLayerWeight(takeLayerIndex, 0f);
         animator.SetLayerWeight(catchLayerIndex, 0f);
     }
 
@@ -91,13 +95,13 @@ public class PlayerController : MonoBehaviour
     {
         Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
 
-        // Battlefield-style input logic
+        // Keyboard priority logic
         if (Keyboard.current != null)
         {
             if (Keyboard.current.aKey.isPressed && Keyboard.current.dKey.isPressed)
-                moveInput.x = -1f; // left priority
+                moveInput.x = -1f;
             if (Keyboard.current.wKey.isPressed && Keyboard.current.sKey.isPressed)
-                moveInput.y = 1f; // forward priority
+                moveInput.y = 1f;
         }
 
         bool runPressed = runAction.action.IsPressed();
@@ -116,11 +120,8 @@ public class PlayerController : MonoBehaviour
 
         if (!isThrowingFullBody && !isTakingFullBody)
         {
-            if (Mathf.Abs(targetSpeed) > currentSpeed)
-                currentSpeed = Mathf.MoveTowards(currentSpeed, targetSpeed, Time.deltaTime * acceleration);
-            else
-                currentSpeed = Mathf.MoveTowards(currentSpeed, targetSpeed, Time.deltaTime * deceleration);
-
+            currentSpeed = Mathf.MoveTowards(currentSpeed, targetSpeed,
+                (Mathf.Abs(targetSpeed) > currentSpeed ? acceleration : deceleration) * Time.deltaTime);
             animator.SetFloat(SpeedHash, currentSpeed);
         }
         else
@@ -132,23 +133,20 @@ public class PlayerController : MonoBehaviour
         if (moveInput != Vector2.zero && !isThrowingFullBody && !isTakingFullBody)
         {
             Vector3 direction = new Vector3(moveInput.x, 0, moveInput.y);
-            Quaternion targetRotation = Quaternion.LookRotation(direction);
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * rotationSpeed);
+            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(direction),
+                Time.deltaTime * rotationSpeed);
         }
 
-        // Throw
+        // Trigger throw animation
         if (throwPressed && heldObject != null)
         {
             if (moveInput != Vector2.zero)
                 animator.SetBool(IsThrowingHash, true);
             else
                 animator.SetBool(IsThrowingFullHash, true);
-
-            Vector3 forwardForce = transform.forward * throwForce + Vector3.up * 2f;
-            ThrowHeldObject(forwardForce);
         }
 
-        // Take Object (manual trigger)
+        // Take Object
         if (takePressed && canPickUp)
         {
             if (moveInput != Vector2.zero)
@@ -157,27 +155,20 @@ public class PlayerController : MonoBehaviour
                 animator.SetBool(IsTakeObjectFullHash, true);
         }
 
-
         if (CheckForIncomingObject())
             animator.SetBool(IsCatchingHash, true);
 
-        // Blend animation layers
+        // Blend layers
         UpdateLayerWeight(IsThrowingHash, ref throwLayerWeight, throwLayerIndex);
         UpdateLayerWeight(IsTakeObjectHash, ref takeLayerWeight, takeLayerIndex);
         UpdateLayerWeight(IsCatchingHash, ref catchLayerWeight, catchLayerIndex);
 
-        // Reset bools when finished
+        // Reset animation bools
         ResetAnimationState(throwLayerIndex, "Throw_Run", IsThrowingHash);
         ResetAnimationState(0, "ThrowFullBody", IsThrowingFullHash);
         ResetAnimationState(takeLayerIndex, "Take_Object", IsTakeObjectHash);
         ResetAnimationState(0, "TakeObjectFull", IsTakeObjectFullHash);
         ResetAnimationState(catchLayerIndex, "Catch", IsCatchingHash);
-
-        // ✅ Restore movement after full-body actions end
-        if (!isThrowingFullBody && !isTakingFullBody && targetSpeed > 0)
-        {
-            animator.SetFloat(SpeedHash, targetSpeed);
-        }
     }
 
     void FixedUpdate()
@@ -185,7 +176,6 @@ public class PlayerController : MonoBehaviour
         if (isThrowingFullBody || isTakingFullBody) return;
 
         Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
-
         if (Keyboard.current != null)
         {
             if (Keyboard.current.aKey.isPressed && Keyboard.current.dKey.isPressed)
@@ -199,12 +189,11 @@ public class PlayerController : MonoBehaviour
         if (moveInput != Vector2.zero)
         {
             Vector3 direction = new Vector3(moveInput.x, 0, moveInput.y).normalized;
-            Vector3 move = direction * currentSpeed;
-            rb.MovePosition(rb.position + move * Time.fixedDeltaTime);
+            rb.MovePosition(rb.position + direction * currentSpeed * Time.fixedDeltaTime);
         }
     }
 
-    // === Utility ===
+    // === Animation Layer Helpers ===
     private void UpdateLayerWeight(int boolHash, ref float layerWeight, int layerIndex)
     {
         float target = animator.GetBool(boolHash) ? 1f : 0f;
@@ -221,7 +210,7 @@ public class PlayerController : MonoBehaviour
 
     private bool CheckForIncomingObject() => false;
 
-    // === Object Attach / Throw ===
+    // === Object Handling ===
     public void AttachObjectToHand(ThrowableObject obj)
     {
         if (obj == null || rightHand == null) return;
@@ -229,21 +218,35 @@ public class PlayerController : MonoBehaviour
         obj.OnPickedUp(rightHand);
     }
 
-    public void ThrowHeldObject(Vector3 throwForce)
+    // --- ACCURATE THROW SYSTEM ---
+    private Vector3 GetThrowTargetPoint()
+    {
+        return transform.position + transform.forward * throwDistance + Vector3.up * throwHeight;
+    }
+
+    private Vector3 CalculateThrowVelocity(Vector3 origin, Vector3 target, float timeToTarget)
+    {
+        Vector3 displacementXZ = new Vector3(target.x - origin.x, 0, target.z - origin.z);
+        Vector3 velocityXZ = displacementXZ / timeToTarget;
+        float velocityY = (target.y - origin.y) / timeToTarget - 0.5f * Physics.gravity.y * timeToTarget;
+        return velocityXZ + Vector3.up * velocityY;
+    }
+
+    // Called from animation event at the throw frame
+    public void ReleaseHeldObjectEvent()
     {
         if (heldObject == null) return;
 
-        heldObject.OnThrown(throwForce);
+        Vector3 targetPoint = GetThrowTargetPoint();
+        Vector3 throwVelocity = CalculateThrowVelocity(heldObject.transform.position, targetPoint, throwTime);
 
-        // Clear pickup references immediately
-        if (canPickUp)
-            canPickUp = false;
-
-        StartCoroutine(ThrowCooldown());
+        heldObject.OnThrown(throwVelocity);
 
         heldObject = null;
-    }
+        canPickUp = false;
 
+        StartCoroutine(ThrowCooldown());
+    }
 
     private System.Collections.IEnumerator ThrowCooldown()
     {
@@ -252,8 +255,16 @@ public class PlayerController : MonoBehaviour
         recentlyThrew = false;
     }
 
+    // Animation Event functions
+    public void AttachNearbyObjectEvent()
+    {
+        if (objectToAttach != null)
+        {
+            AttachObjectToHand(objectToAttach);
+            objectToAttach = null;
+        }
+    }
 
-    // === Called from Animation Event ===
     public void AttachHeldObjectEvent()
     {
         if (heldObject == null)
