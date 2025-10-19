@@ -43,7 +43,9 @@ public class CatchTrigger : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.E) && nearbyObject != null && !playerController.recentlyThrew)
         {
-            playerController.objectToAttach = nearbyObject; // <-- assign object
+            playerController.objectToAttach = nearbyObject;
+            nearbyObject.SetOwner(playerController);
+
             Animator animator = playerController.animator;
             float moveSpeed = animator.GetFloat("Speed");
 
@@ -56,7 +58,4 @@ public class CatchTrigger : MonoBehaviour
             playerController.canPickUp = false;
         }
     }
-
-
-
 }
