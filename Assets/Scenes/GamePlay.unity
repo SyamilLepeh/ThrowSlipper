@@ -416,9 +416,9 @@ MonoBehaviour:
   throwAction: {fileID: 1120369429361536294, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   heldObject: {fileID: 1478283072}
   rightHand: {fileID: 1990441850}
-  throwTime: 0.5
-  throwDistance: 10
-  throwHeight: 2
+  throwTime: 0.8
+  throwDistance: 5
+  throwHeight: 1
   passTarget: {fileID: 1798746001}
   passTargetCatchPoint: {fileID: 2016154290}
   canPickUp: 0
@@ -593,10 +593,10 @@ GameObject:
   m_Component:
   - component: {fileID: 1245958633}
   - component: {fileID: 1245958636}
-  - component: {fileID: 1245958635}
   - component: {fileID: 1245958634}
+  - component: {fileID: 1245958637}
   m_Layer: 3
-  m_Name: CatchArea
+  m_Name: PickUpArea
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -644,18 +644,6 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
---- !u!114 &1245958635
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1245958632}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5269dd82ebd45d0499e1a8bf8de5aa27, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CatchTrigger
 --- !u!135 &1245958636
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -676,6 +664,87 @@ SphereCollider:
   m_Enabled: 1
   serializedVersion: 3
   m_Radius: 2
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &1245958637
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1245958632}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc7772a46cd4bfb44a06cb268aeb1187, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PickUpTrigger
+--- !u!1 &1373975823
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1373975824}
+  - component: {fileID: 1373975826}
+  - component: {fileID: 1373975825}
+  m_Layer: 3
+  m_Name: CatchTrigger
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1373975824
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1373975823}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 2.67, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1798746001}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1373975825
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1373975823}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5269dd82ebd45d0499e1a8bf8de5aa27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CatchTrigger
+  player: {fileID: 1798745998}
+--- !u!136 &1373975826
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1373975823}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 0.68
+  m_Height: 3.53
+  m_Direction: 1
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1478283065
 GameObject:
@@ -829,11 +898,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 81ea89a13f4cdc348831b77b73be2981, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ThrowableObject
-  catchDetectionRadius: 3
-  playerLayer:
-    serializedVersion: 2
-    m_Bits: 8
-  minCatchSpeed: 1
+  passTarget: {fileID: 0}
 --- !u!1001 &1497635714
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1124,6 +1189,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1245958633}
+    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1373975824}
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
       insertIndex: -1
@@ -1422,6 +1490,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1666653949}
+    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1812033918}
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
       insertIndex: -1
@@ -1440,10 +1511,10 @@ GameObject:
   m_Component:
   - component: {fileID: 1666653949}
   - component: {fileID: 1666653951}
-  - component: {fileID: 1666653950}
   - component: {fileID: 1666653952}
+  - component: {fileID: 1666653953}
   m_Layer: 3
-  m_Name: CatchArea
+  m_Name: PickUpArea
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1464,18 +1535,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1026244638}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1666653950
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1666653948}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5269dd82ebd45d0499e1a8bf8de5aa27, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CatchTrigger
 --- !u!135 &1666653951
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -1524,6 +1583,18 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!114 &1666653953
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1666653948}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc7772a46cd4bfb44a06cb268aeb1187, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PickUpTrigger
 --- !u!1 &1798745997 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
@@ -1554,9 +1625,9 @@ MonoBehaviour:
   throwAction: {fileID: -2099379676528639254, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   heldObject: {fileID: 1478283072}
   rightHand: {fileID: 2016154290}
-  throwTime: 0.5
-  throwDistance: 10
-  throwHeight: 2
+  throwTime: 0.8
+  throwDistance: 5
+  throwHeight: 1
   passTarget: {fileID: 1026244638}
   passTargetCatchPoint: {fileID: 1990441850}
   canPickUp: 0
@@ -1594,6 +1665,75 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}
   m_PrefabInstance: {fileID: 1497635714}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1812033917
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1812033918}
+  - component: {fileID: 1812033919}
+  - component: {fileID: 1812033920}
+  m_Layer: 3
+  m_Name: CatchTrigger
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1812033918
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1812033917}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 2.67, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1026244638}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!136 &1812033919
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1812033917}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 0.68
+  m_Height: 3.53
+  m_Direction: 1
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &1812033920
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1812033917}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5269dd82ebd45d0499e1a8bf8de5aa27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CatchTrigger
+  player: {fileID: 1026244636}
 --- !u!4 &1990441850 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2412161367050800168, guid: bb956c709e95d9f4fa88b4cb750b98a1, type: 3}

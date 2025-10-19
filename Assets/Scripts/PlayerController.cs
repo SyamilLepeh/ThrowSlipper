@@ -40,6 +40,8 @@ public class PlayerController : MonoBehaviour
     [HideInInspector] public bool recentlyThrew = false;
     [HideInInspector] public ThrowableObject objectToAttach;
 
+    private bool canProcessThrow = false;
+
     private int SpeedHash;
     private int IsThrowingHash;
     private int IsThrowingFullHash;
@@ -80,6 +82,9 @@ public class PlayerController : MonoBehaviour
         animator.SetLayerWeight(throwLayerIndex, 0f);
         animator.SetLayerWeight(takeLayerIndex, 0f);
         animator.SetLayerWeight(catchLayerIndex, 0f);
+
+        // Delay throw input for 0.1s to prevent phantom throw
+        StartCoroutine(EnableThrowInput());
     }
 
     void OnEnable()
@@ -129,17 +134,25 @@ public class PlayerController : MonoBehaviour
         }
 
         // === THROW ===
-        if (throwPressed && heldObject != null)
+        if (throwPressed && heldObject != null && canProcessThrow)
         {
+            // Ensure heldObject is still in hand
+            if (!heldObject.IsHeld())
+                return;
+
             if (moveInput != Vector2.zero)
                 animator.SetBool(IsThrowingHash, true);
             else
                 animator.SetBool(IsThrowingFullHash, true);
         }
 
+
         // === TAKE ===
-        if (takePressed && canPickUp)
+        if (takePressed && canPickUp && objectToAttach != null)
         {
+            AttachObjectToHand(objectToAttach); // assign immediately
+            objectToAttach = null;
+
             if (moveInput != Vector2.zero)
                 animator.SetBool(IsTakeObjectHash, true);
             else
@@ -180,6 +193,12 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    private IEnumerator EnableThrowInput()
+    {
+        yield return new WaitForSeconds(0.1f);
+        canProcessThrow = true;
+    }
+
     // === HELPER METHODS ===
     private void UpdateLayerWeight(int boolHash, ref float layerWeight, int layerIndex)
     {
@@ -194,10 +213,25 @@ public class PlayerController : MonoBehaviour
         if (state.IsName(stateName) && state.normalizedTime >= 0.95f)
         {
             animator.SetBool(boolHash, false);
+
+            // Extra safety: if no object is held, reset throw flags
+            if (boolHash == IsThrowingHash || boolHash == IsThrowingFullHash)
+            {
+                if (heldObject == null)
+                    animator.SetBool(boolHash, false);
+            }
+            if (boolHash == IsTakeObjectHash || boolHash == IsTakeObjectFullHash)
+            {
+                if (objectToAttach == null)
+                    animator.SetBool(boolHash, false);
+            }
+
             if (boolHash == IsCatchingHash)
                 isCatchingInProgress = false;
         }
     }
+
+
 
     private bool CheckForIncomingObject() => false; // Optional custom detection
 
@@ -228,20 +262,36 @@ public class PlayerController : MonoBehaviour
     {
         if (heldObject == null) return;
 
-        Vector3 targetPoint;
-        if (passTarget != null)
-        {
-            targetPoint = passTargetCatchPoint ? passTargetCatchPoint.position : passTarget.position + Vector3.up * 1.5f;
-            PlayerController teammate = passTarget.GetComponent<PlayerController>();
-            if (teammate != null)
-                teammate.TriggerCatch();
-        }
-        else targetPoint = GetThrowTargetPoint();
+        // Detach object immediately from hand
+        heldObject.transform.SetParent(null);
 
+        // Ensure Rigidbody is active and collider enabled
+        heldObject.GetComponent<Rigidbody>().isKinematic = false;
+        heldObject.GetComponent<Collider>().enabled = true;
+
+        // Compute throw target
+        Vector3 targetPoint = passTarget != null
+            ? (passTargetCatchPoint != null ? passTargetCatchPoint.position : passTarget.position + Vector3.up * 1.5f)
+            : GetThrowTargetPoint();
+
+        PlayerController teammate = passTarget != null ? passTarget.GetComponent<PlayerController>() : null;
+
+        // Apply velocity
         Vector3 throwVelocity = CalculateThrowVelocity(heldObject.transform.position, targetPoint, throwTime);
-        heldObject.OnThrown(throwVelocity);
+        heldObject.OnThrown(throwVelocity, teammate);
+
+        // Clear local references
         heldObject = null;
         canPickUp = false;
+
+        // Reset animator flags
+        animator.SetBool(IsThrowingHash, false);
+        animator.SetBool(IsThrowingFullHash, false);
+
+        // Prevent phantom throw
+        canProcessThrow = false;
+        StartCoroutine(EnableThrowInput());
+
         StartCoroutine(ThrowCooldown());
     }
 
@@ -254,12 +304,23 @@ public class PlayerController : MonoBehaviour
 
     public void AttachNearbyObjectEvent()
     {
-        if (objectToAttach != null)
+        if (objectToAttach != null && rightHand != null)
         {
-            AttachObjectToHand(objectToAttach);
+            // Check distance to make sure object is still close enough
+            float distance = Vector3.Distance(objectToAttach.transform.position, transform.position);
+            if (distance <= 2f) // 2 units pickup range
+            {
+                AttachObjectToHand(objectToAttach);
+            }
+            else
+            {
+                Debug.LogWarning($"{name} tried to pick up {objectToAttach.name}, but it's too far.");
+            }
+
             objectToAttach = null;
         }
     }
+
 
     // === Animation Event: Attach caught object ===
     public void AttachCaughtObjectEvent()
