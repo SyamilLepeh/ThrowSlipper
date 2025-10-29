@@ -3,24 +3,30 @@
 [RequireComponent(typeof(Collider))]
 public class CatchTrigger : MonoBehaviour
 {
-    public PlayerController player;
+    private PlayerController playerController;
+
+    private void Start()
+    {
+        playerController = GetComponentInParent<PlayerController>();
+    }
 
     private void OnTriggerEnter(Collider other)
     {
-        ThrowableObject throwable = other.GetComponent<ThrowableObject>();
-        if (throwable != null && throwable.passTarget == player && !throwable.IsHeld())
+        if (!other.CompareTag("Throwable")) return;
+
+        ThrowableObject obj = other.GetComponent<ThrowableObject>();
+        if (obj == null) return;
+
+        if (!obj.IsHeld() && obj.passTarget == playerController)
         {
-            // Stop the object's motion
-            throwable.StopMotion();
+            // Stop motion and let PlayerController handle the rest (rotation/anim/attach)
+            obj.StopMotion();
 
-            // Attach object to player's hand
-            player.AttachObjectToHand(throwable);
+            // Make sure we don't leave isReadyToCatch true while catching
+            playerController.SetReadyToCatch(false);
 
-            // Play catch animation
-            player.TriggerCatch();
-
-            // Clear pass target
-            throwable.passTarget = null;
+            // Ask player controller to handle catch (plays animation and will auto-attach)
+            playerController.CatchObject(obj);
         }
     }
 }

@@ -48,6 +48,7 @@ public class PlayerController : MonoBehaviour
     private int IsTakeObjectHash;
     private int IsTakeObjectFullHash;
     private int IsCatchingHash;
+    private int IsReadyToCatchHash;
 
     private bool isThrowingFullBody = false;
     private bool isTakingFullBody = false;
@@ -72,6 +73,8 @@ public class PlayerController : MonoBehaviour
         IsTakeObjectHash = Animator.StringToHash("isTakeObject");
         IsTakeObjectFullHash = Animator.StringToHash("isTakeObjectFull");
         IsCatchingHash = Animator.StringToHash("isCatching");
+        IsReadyToCatchHash = Animator.StringToHash("isReadyToCatch");
+
 
         // Layer indices
         throwLayerIndex = animator.GetLayerIndex("ThrowLayer");
@@ -169,7 +172,8 @@ public class PlayerController : MonoBehaviour
         // === LAYER WEIGHT BLENDING ===
         UpdateLayerWeight(IsThrowingHash, ref throwLayerWeight, throwLayerIndex);
         UpdateLayerWeight(IsTakeObjectHash, ref takeLayerWeight, takeLayerIndex);
-        UpdateLayerWeight(IsCatchingHash, ref catchLayerWeight, catchLayerIndex);
+        UpdateCatchLayerWeight(ref catchLayerWeight, catchLayerIndex);
+
 
         // === STATE RESET ===
         ResetAnimationState(throwLayerIndex, "Throw_Run", IsThrowingHash);
@@ -325,43 +329,45 @@ public class PlayerController : MonoBehaviour
     // === Animation Event: Attach caught object ===
     public void AttachCaughtObjectEvent()
     {
-        if (rightHand == null) return;
-
-        // Find the nearest throwable object that is not held
-        ThrowableObject nearestObj = null;
-        float nearestDistance = 2f; // catch radius
-
-        Collider[] hits = Physics.OverlapSphere(transform.position, nearestDistance);
-        foreach (var hit in hits)
+        if (objectToAttach == null)
         {
-            ThrowableObject obj = hit.GetComponent<ThrowableObject>();
-            if (obj != null && !obj.IsHeld())
-            {
-                float dist = Vector3.Distance(hit.transform.position, transform.position);
-                if (dist < nearestDistance)
-                {
-                    nearestDistance = dist;
-                    nearestObj = obj;
-                }
-            }
+            Debug.LogWarning($"{name} tried to attach caught object, but none was stored.");
+            return;
         }
 
-        // If found, attach to hand
-        if (nearestObj != null)
+        if (rightHand == null)
         {
-            AttachObjectToHand(nearestObj);
-            Debug.Log($"{name} caught {nearestObj.name}");
+            Debug.LogError($"{name} has no rightHand assigned in the inspector!");
+            return;
+        }
 
-            // Optional small snap correction
-            nearestObj.transform.position = rightHand.position;
-            nearestObj.transform.rotation = rightHand.rotation;
-        }
-        else
-        {
-            Debug.LogWarning($"{name} tried to catch, but no throwable object nearby.");
-        }
+        // Attach the caught object directly to right hand
+        AttachObjectToHand(objectToAttach);
+
+        // Snap object position & rotation perfectly
+        objectToAttach.transform.position = rightHand.position;
+        objectToAttach.transform.rotation = rightHand.rotation;
+
+        Debug.Log($"{name} successfully caught and attached {objectToAttach.name}");
+
+        // Clear reference
+        objectToAttach = null;
+        isCatchingInProgress = false;
     }
 
+    public void SetReadyToCatch(bool ready)
+    {
+        animator.SetBool(IsReadyToCatchHash, ready);
+    }
+
+    private void UpdateCatchLayerWeight(ref float layerWeight, int layerIndex)
+    {
+        bool ready = animator.GetBool(IsReadyToCatchHash);
+        bool catching = isCatchingInProgress;
+        float target = (ready || catching) ? 1f : 0f;
+        layerWeight = Mathf.MoveTowards(layerWeight, target, Time.deltaTime * layerBlendSpeed);
+        animator.SetLayerWeight(layerIndex, layerWeight);
+    }
 
     // === CATCH SYSTEM (Trigger Based) ===
     public void TriggerCatch()
@@ -405,4 +411,53 @@ public class PlayerController : MonoBehaviour
         isCatchingInProgress = false;
         animator.ResetTrigger(IsCatchingHash);
     }
+
+    // === DIRECT TRIGGER FROM CatchTrigger ===
+    public void CatchObject(ThrowableObject obj)
+    {
+        if (obj == null || isCatchingInProgress) return;
+
+        // Hentikan objek supaya senang dikawal
+        obj.StopMotion();
+
+        // Simpan rujukan
+        objectToAttach = obj;
+
+        // Main animasi tangkap
+        TriggerCatch();
+        
+
+        // Pusing Player B ke arah objek yang datang
+        Vector3 dir = obj.transform.position - transform.position;
+        dir.y = 0;
+        if (dir.sqrMagnitude > 0.01f)
+        {
+            Quaternion lookRot = Quaternion.LookRotation(dir);
+            transform.rotation = Quaternion.Slerp(transform.rotation, lookRot, 0.5f);
+        }
+
+        // --- Tambah: Auto attach selepas delay kecil (tanpa animation event) ---
+        StartCoroutine(AutoAttachCaughtObject(obj));
+    }
+
+    private IEnumerator AutoAttachCaughtObject(ThrowableObject obj)
+    {
+        yield return new WaitForSeconds(0f); // Delay ikut masa animasi tangkap
+
+        if (obj != null && rightHand != null)
+        {
+            AttachObjectToHand(obj);
+            obj.transform.position = rightHand.position;
+            obj.transform.rotation = rightHand.rotation;
+
+            Debug.Log($"{name} auto-attached {obj.name} after catch delay.");
+        }
+
+        objectToAttach = null;
+        isCatchingInProgress = false;
+    }
+
+    
+
+
 }

@@ -19,9 +19,11 @@ public class ThrowableObject : MonoBehaviour
     {
         rb.isKinematic = true;
         col.enabled = false;
+
         transform.SetParent(hand);
         transform.localPosition = Vector3.zero;
         transform.localRotation = Quaternion.identity;
+
         handOwner = owner;
         passTarget = null;
     }
@@ -30,17 +32,24 @@ public class ThrowableObject : MonoBehaviour
     {
         rb.isKinematic = false;
         col.enabled = true;
+
+        // Reset velocity untuk pastikan lontaran bersih
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+
+        // Gunakan velocity terus dari parameter
         rb.linearVelocity = velocity;
+
         handOwner = null;
         passTarget = target;
     }
-
 
     public bool IsHeld() => handOwner != null;
 
     public void StopMotion()
     {
         rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
         rb.isKinematic = true;
         col.enabled = false;
     }
@@ -48,5 +57,10 @@ public class ThrowableObject : MonoBehaviour
     public void SetOwner(PlayerController owner)
     {
         handOwner = owner;
+    }
+
+    public PlayerController GetOwner()
+    {
+        return handOwner;
     }
 }
