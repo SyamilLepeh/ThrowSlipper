@@ -5,7 +5,9 @@ public class ThrowableObject : MonoBehaviour
 {
     private Rigidbody rb;
     private Collider col;
+
     private PlayerController handOwner;
+    private bool isReserved = false;
 
     [HideInInspector] public PlayerController passTarget;
 
@@ -30,6 +32,8 @@ public class ThrowableObject : MonoBehaviour
 
     public void OnThrown(Vector3 velocity, PlayerController target = null)
     {
+        transform.SetParent(null);
+
         rb.isKinematic = false;
         col.enabled = true;
 
@@ -45,13 +49,28 @@ public class ThrowableObject : MonoBehaviour
     }
 
     public bool IsHeld() => handOwner != null;
+    public bool IsReserved() => isReserved;
+
+    public void Reserve(PlayerController owner)
+    {
+        isReserved = true;
+        handOwner = owner; // lock ownership sementara
+    }
+
+    public void ClearReservation()
+    {
+        isReserved = false;
+    }
 
     public void StopMotion()
     {
-        rb.linearVelocity = Vector3.zero;
-        rb.angularVelocity = Vector3.zero;
         rb.isKinematic = true;
         col.enabled = false;
+        if (!rb.isKinematic)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
     }
 
     public void SetOwner(PlayerController owner)

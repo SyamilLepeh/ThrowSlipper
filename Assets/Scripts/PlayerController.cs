@@ -41,6 +41,8 @@ public class PlayerController : MonoBehaviour
     [HideInInspector] public ThrowableObject objectToAttach;
 
     private bool canProcessThrow = false;
+    private bool isTurningToPassTarget = false;
+    private float passTurnSpeed = 12f;
 
     private int SpeedHash;
     private int IsThrowingHash;
@@ -137,11 +139,17 @@ public class PlayerController : MonoBehaviour
         }
 
         // === THROW ===
-        if (throwPressed && heldObject != null && canProcessThrow)
+        if (throwPressed && heldObject != null && canProcessThrow && !isTurningToPassTarget)
         {
             // Ensure heldObject is still in hand
             if (!heldObject.IsHeld())
                 return;
+
+            // Jika ada target untuk pass
+            if (passTarget != null)
+            {
+                isTurningToPassTarget = true;
+            }
 
             if (moveInput != Vector2.zero)
                 animator.SetBool(IsThrowingHash, true);
@@ -150,17 +158,20 @@ public class PlayerController : MonoBehaviour
         }
 
 
-        // === TAKE ===
+        // === TAKE / PICK UP ===
         if (takePressed && canPickUp && objectToAttach != null)
         {
-            AttachObjectToHand(objectToAttach); // assign immediately
-            objectToAttach = null;
+            // Lock object supaya tak hilang walaupun keluar trigger
+            objectToAttach.Reserve(this);
 
-            if (moveInput != Vector2.zero)
-                animator.SetBool(IsTakeObjectHash, true);
+            canPickUp = false;
+
+            if (moveInput.magnitude > 0.1f)
+                animator.SetBool(IsTakeObjectHash, true);       // Walk / Run
             else
-                animator.SetBool(IsTakeObjectFullHash, true);
+                animator.SetBool(IsTakeObjectFullHash, true);   // Idle
         }
+
 
         // === CATCH DETECTION ===
         if (CheckForIncomingObject() && !isCatchingInProgress)
@@ -194,6 +205,30 @@ public class PlayerController : MonoBehaviour
         {
             Vector3 direction = new Vector3(moveInput.x, 0, moveInput.y).normalized;
             rb.MovePosition(rb.position + direction * currentSpeed * Time.fixedDeltaTime);
+        }
+    }
+
+    private void LateUpdate()
+    {
+        if (!isTurningToPassTarget || passTarget == null) return;
+
+        Vector3 dir = passTarget.position - transform.position;
+        dir.y = 0f;
+
+        if (dir.sqrMagnitude < 0.01f) return;
+
+        Quaternion targetRot = Quaternion.LookRotation(dir);
+        transform.rotation = Quaternion.Slerp(
+            transform.rotation,
+            targetRot,
+            Time.deltaTime * passTurnSpeed
+        );
+
+        // Check jika hampir align
+        float angle = Quaternion.Angle(transform.rotation, targetRot);
+        if (angle < 2f)
+        {
+            isTurningToPassTarget = false;
         }
     }
 
@@ -308,22 +343,13 @@ public class PlayerController : MonoBehaviour
 
     public void AttachNearbyObjectEvent()
     {
-        if (objectToAttach != null && rightHand != null)
-        {
-            // Check distance to make sure object is still close enough
-            float distance = Vector3.Distance(objectToAttach.transform.position, transform.position);
-            if (distance <= 2f) // 2 units pickup range
-            {
-                AttachObjectToHand(objectToAttach);
-            }
-            else
-            {
-                Debug.LogWarning($"{name} tried to pick up {objectToAttach.name}, but it's too far.");
-            }
+        if (objectToAttach == null || rightHand == null) return;
 
-            objectToAttach = null;
-        }
+        AttachObjectToHand(objectToAttach);
+        objectToAttach.ClearReservation();
+        objectToAttach = null;
     }
+
 
 
     // === Animation Event: Attach caught object ===
@@ -433,7 +459,7 @@ public class PlayerController : MonoBehaviour
         if (dir.sqrMagnitude > 0.01f)
         {
             Quaternion lookRot = Quaternion.LookRotation(dir);
-            transform.rotation = Quaternion.Slerp(transform.rotation, lookRot, 0.5f);
+            transform.rotation = Quaternion.Slerp(transform.rotation, lookRot, Time.deltaTime * 8f);
         }
 
         // --- Tambah: Auto attach selepas delay kecil (tanpa animation event) ---
@@ -456,8 +482,4 @@ public class PlayerController : MonoBehaviour
         objectToAttach = null;
         isCatchingInProgress = false;
     }
-
-    
-
-
 }
