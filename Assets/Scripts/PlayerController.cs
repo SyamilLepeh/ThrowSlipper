@@ -36,6 +36,15 @@ public class PlayerController : MonoBehaviour
     public Transform passTarget; // teammate transform
     public Transform passTargetCatchPoint; // teammate catch point
 
+    [Header("Pass Power (DEBUG)")]
+    public float maxPassPower = 1.5f;
+    public float minPassPower = 0.2f;
+    public float passChargeSpeed = 1f;
+
+    private float currentPassPower = 0f;
+    private bool isChargingPass = false;
+    private bool passPowerLocked = false;
+
     [HideInInspector] public bool canPickUp = false;
     [HideInInspector] public bool recentlyThrew = false;
     [HideInInspector] public ThrowableObject objectToAttach;
@@ -77,7 +86,6 @@ public class PlayerController : MonoBehaviour
         IsCatchingHash = Animator.StringToHash("isCatching");
         IsReadyToCatchHash = Animator.StringToHash("isReadyToCatch");
 
-
         // Layer indices
         throwLayerIndex = animator.GetLayerIndex("ThrowLayer");
         takeLayerIndex = animator.GetLayerIndex("TakeObjectLayer");
@@ -112,7 +120,8 @@ public class PlayerController : MonoBehaviour
     {
         Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
         bool runPressed = runAction.action.IsPressed();
-        bool throwPressed = throwAction.action.WasPressedThisFrame();
+        bool throwHeld = throwAction.action.IsPressed();
+        bool throwReleased = throwAction.action.WasReleasedThisFrame();
         bool takePressed = takeAction.action.WasPressedThisFrame();
 
         float currentMaxVelocity = runPressed ? maximumRunVelocity : maximumWalkVelocity;
@@ -138,40 +147,47 @@ public class PlayerController : MonoBehaviour
             transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(direction), Time.deltaTime * rotationSpeed);
         }
 
-        // === THROW ===
-        if (throwPressed && heldObject != null && canProcessThrow && !isTurningToPassTarget)
+        // === PASS POWER CHARGE (DEBUG) ===
+        if (throwHeld && heldObject != null && canProcessThrow && !passPowerLocked)
         {
-            // Ensure heldObject is still in hand
-            if (!heldObject.IsHeld())
-                return;
+            isChargingPass = true;
+            currentPassPower += Time.deltaTime * passChargeSpeed;
+            currentPassPower = Mathf.Clamp(currentPassPower, minPassPower, maxPassPower);
 
-            // Jika ada target untuk pass
+            Debug.Log($"[PASS CHARGING] Power: {currentPassPower:F2}");
+        }
+
+        if (throwReleased && isChargingPass)
+        {
+            isChargingPass = false;
+            passPowerLocked = true;
+
+            Debug.Log($"[PASS LOCKED] Final Power: {currentPassPower:F2}");
+
             if (passTarget != null)
-            {
                 isTurningToPassTarget = true;
-            }
+        }
 
+        // === THROW / PASS ANIMATION ===
+        if (passPowerLocked && heldObject != null && canProcessThrow && !isTurningToPassTarget)
+        {
             if (moveInput != Vector2.zero)
                 animator.SetBool(IsThrowingHash, true);
             else
                 animator.SetBool(IsThrowingFullHash, true);
         }
 
-
         // === TAKE / PICK UP ===
         if (takePressed && canPickUp && objectToAttach != null)
         {
-            // Lock object supaya tak hilang walaupun keluar trigger
             objectToAttach.Reserve(this);
-
             canPickUp = false;
 
             if (moveInput.magnitude > 0.1f)
-                animator.SetBool(IsTakeObjectHash, true);       // Walk / Run
+                animator.SetBool(IsTakeObjectHash, true);
             else
-                animator.SetBool(IsTakeObjectFullHash, true);   // Idle
+                animator.SetBool(IsTakeObjectFullHash, true);
         }
-
 
         // === CATCH DETECTION ===
         if (CheckForIncomingObject() && !isCatchingInProgress)
@@ -184,7 +200,6 @@ public class PlayerController : MonoBehaviour
         UpdateLayerWeight(IsThrowingHash, ref throwLayerWeight, throwLayerIndex);
         UpdateLayerWeight(IsTakeObjectHash, ref takeLayerWeight, takeLayerIndex);
         UpdateCatchLayerWeight(ref catchLayerWeight, catchLayerIndex);
-
 
         // === STATE RESET ===
         ResetAnimationState(throwLayerIndex, "Throw_Run", IsThrowingHash);
@@ -224,11 +239,23 @@ public class PlayerController : MonoBehaviour
             Time.deltaTime * passTurnSpeed
         );
 
-        // Check jika hampir align
+        // Check if almost aligned
         float angle = Quaternion.Angle(transform.rotation, targetRot);
         if (angle < 2f)
         {
             isTurningToPassTarget = false;
+
+            // Start throw animation after facing target
+            AnimatorStateInfo baseState = animator.GetCurrentAnimatorStateInfo(0);
+            if (baseState.IsName("Idle") || baseState.IsName("Walk"))
+            {
+                if (rb.linearVelocity.magnitude > 0.1f)
+                    animator.SetBool(IsThrowingHash, true);
+                else
+                    animator.SetBool(IsThrowingFullHash, true);
+
+                Debug.Log("[PASS] Facing target → animation triggered");
+            }
         }
     }
 
@@ -238,7 +265,6 @@ public class PlayerController : MonoBehaviour
         canProcessThrow = true;
     }
 
-    // === HELPER METHODS ===
     private void UpdateLayerWeight(int boolHash, ref float layerWeight, int layerIndex)
     {
         float target = animator.GetBool(boolHash) ? 1f : 0f;
@@ -253,28 +279,19 @@ public class PlayerController : MonoBehaviour
         {
             animator.SetBool(boolHash, false);
 
-            // Extra safety: if no object is held, reset throw flags
-            if (boolHash == IsThrowingHash || boolHash == IsThrowingFullHash)
-            {
-                if (heldObject == null)
-                    animator.SetBool(boolHash, false);
-            }
-            if (boolHash == IsTakeObjectHash || boolHash == IsTakeObjectFullHash)
-            {
-                if (objectToAttach == null)
-                    animator.SetBool(boolHash, false);
-            }
+            if ((boolHash == IsThrowingHash || boolHash == IsThrowingFullHash) && heldObject == null)
+                animator.SetBool(boolHash, false);
+
+            if ((boolHash == IsTakeObjectHash || boolHash == IsTakeObjectFullHash) && objectToAttach == null)
+                animator.SetBool(boolHash, false);
 
             if (boolHash == IsCatchingHash)
                 isCatchingInProgress = false;
         }
     }
 
+    private bool CheckForIncomingObject() => false; // Optional
 
-
-    private bool CheckForIncomingObject() => false; // Optional custom detection
-
-    // === OBJECT ATTACH ===
     public void AttachObjectToHand(ThrowableObject obj)
     {
         if (obj == null || rightHand == null) return;
@@ -282,7 +299,6 @@ public class PlayerController : MonoBehaviour
         obj.OnPickedUp(rightHand, this);
     }
 
-    // === THROW SYSTEM ===
     private Vector3 GetThrowTargetPoint()
     {
         return transform.position + transform.forward * throwDistance + Vector3.up * throwHeight;
@@ -296,42 +312,36 @@ public class PlayerController : MonoBehaviour
         return velocityXZ + Vector3.up * velocityY;
     }
 
-    // === ANIMATION EVENTS ===
     public void ReleaseHeldObjectEvent()
     {
         if (heldObject == null) return;
 
-        // Detach object immediately from hand
         heldObject.transform.SetParent(null);
-
-        // Ensure Rigidbody is active and collider enabled
         heldObject.GetComponent<Rigidbody>().isKinematic = false;
         heldObject.GetComponent<Collider>().enabled = true;
 
-        // Compute throw target
         Vector3 targetPoint = passTarget != null
             ? (passTargetCatchPoint != null ? passTargetCatchPoint.position : passTarget.position + Vector3.up * 1.5f)
             : GetThrowTargetPoint();
 
         PlayerController teammate = passTarget != null ? passTarget.GetComponent<PlayerController>() : null;
-
-        // Apply velocity
         Vector3 throwVelocity = CalculateThrowVelocity(heldObject.transform.position, targetPoint, throwTime);
+        throwVelocity *= currentPassPower;
+
+        Debug.Log($"[PASS THROW] Velocity Multiplier: {currentPassPower:F2}");
         heldObject.OnThrown(throwVelocity, teammate);
 
-        // Clear local references
         heldObject = null;
         canPickUp = false;
-
-        // Reset animator flags
         animator.SetBool(IsThrowingHash, false);
         animator.SetBool(IsThrowingFullHash, false);
 
-        // Prevent phantom throw
         canProcessThrow = false;
         StartCoroutine(EnableThrowInput());
-
         StartCoroutine(ThrowCooldown());
+
+        currentPassPower = 0f;
+        passPowerLocked = false;
     }
 
     private IEnumerator ThrowCooldown()
@@ -344,39 +354,20 @@ public class PlayerController : MonoBehaviour
     public void AttachNearbyObjectEvent()
     {
         if (objectToAttach == null || rightHand == null) return;
-
         AttachObjectToHand(objectToAttach);
         objectToAttach.ClearReservation();
         objectToAttach = null;
     }
 
-
-
-    // === Animation Event: Attach caught object ===
     public void AttachCaughtObjectEvent()
     {
-        if (objectToAttach == null)
-        {
-            Debug.LogWarning($"{name} tried to attach caught object, but none was stored.");
-            return;
-        }
+        if (objectToAttach == null) return;
+        if (rightHand == null) return;
 
-        if (rightHand == null)
-        {
-            Debug.LogError($"{name} has no rightHand assigned in the inspector!");
-            return;
-        }
-
-        // Attach the caught object directly to right hand
         AttachObjectToHand(objectToAttach);
-
-        // Snap object position & rotation perfectly
         objectToAttach.transform.position = rightHand.position;
         objectToAttach.transform.rotation = rightHand.rotation;
 
-        Debug.Log($"{name} successfully caught and attached {objectToAttach.name}");
-
-        // Clear reference
         objectToAttach = null;
         isCatchingInProgress = false;
     }
@@ -395,18 +386,12 @@ public class PlayerController : MonoBehaviour
         animator.SetLayerWeight(layerIndex, layerWeight);
     }
 
-    // === CATCH SYSTEM (Trigger Based) ===
     public void TriggerCatch()
     {
-        // Only trigger if not already catching
         if (!isCatchingInProgress)
         {
             isCatchingInProgress = true;
-
-            // Trigger catch animation
             animator.SetTrigger(IsCatchingHash);
-
-            // Start blend-in/out coroutine
             StartCoroutine(CatchLayerBlendRoutine());
         }
     }
@@ -415,7 +400,6 @@ public class PlayerController : MonoBehaviour
     {
         float blend = 0f;
 
-        // Blend IN CatchLayer
         while (blend < 1f)
         {
             blend += Time.deltaTime * layerBlendSpeed;
@@ -423,10 +407,8 @@ public class PlayerController : MonoBehaviour
             yield return null;
         }
 
-        // Wait until catch animation finishes
-        yield return new WaitForSeconds(0.6f); // Adjust to your animation length
+        yield return new WaitForSeconds(0.6f);
 
-        // Blend OUT CatchLayer
         while (blend > 0f)
         {
             blend -= Time.deltaTime * layerBlendSpeed;
@@ -438,22 +420,15 @@ public class PlayerController : MonoBehaviour
         animator.ResetTrigger(IsCatchingHash);
     }
 
-    // === DIRECT TRIGGER FROM CatchTrigger ===
     public void CatchObject(ThrowableObject obj)
     {
         if (obj == null || isCatchingInProgress) return;
 
-        // Hentikan objek supaya senang dikawal
         obj.StopMotion();
-
-        // Simpan rujukan
         objectToAttach = obj;
 
-        // Main animasi tangkap
         TriggerCatch();
-        
 
-        // Pusing Player B ke arah objek yang datang
         Vector3 dir = obj.transform.position - transform.position;
         dir.y = 0;
         if (dir.sqrMagnitude > 0.01f)
@@ -462,13 +437,12 @@ public class PlayerController : MonoBehaviour
             transform.rotation = Quaternion.Slerp(transform.rotation, lookRot, Time.deltaTime * 8f);
         }
 
-        // --- Tambah: Auto attach selepas delay kecil (tanpa animation event) ---
         StartCoroutine(AutoAttachCaughtObject(obj));
     }
 
     private IEnumerator AutoAttachCaughtObject(ThrowableObject obj)
     {
-        yield return new WaitForSeconds(0f); // Delay ikut masa animasi tangkap
+        yield return new WaitForSeconds(0f);
 
         if (obj != null && rightHand != null)
         {
