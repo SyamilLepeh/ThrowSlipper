@@ -21,6 +21,9 @@ public class PickUpTrigger : MonoBehaviour
 
         player.objectToAttach = obj;
         player.canPickUp = true;
+
+        // Start pick-up animation automatically
+        player.TriggerPickUpAnimation();
     }
 
     private void OnTriggerExit(Collider other)

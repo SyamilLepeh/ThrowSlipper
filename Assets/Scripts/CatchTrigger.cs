@@ -17,16 +17,14 @@ public class CatchTrigger : MonoBehaviour
         ThrowableObject obj = other.GetComponent<ThrowableObject>();
         if (obj == null) return;
 
-        if (!obj.IsHeld() && obj.passTarget == playerController)
+        if (!obj.IsHeld())
         {
-            // Stop motion and let PlayerController handle the rest (rotation/anim/attach)
+            // Stop motion
             obj.StopMotion();
 
-            // Make sure we don't leave isReadyToCatch true while catching
+            // Reserve and attach automatically
+            playerController.objectToAttach = obj;  // assign object to attach
             playerController.SetReadyToCatch(false);
-
-            // Ask player controller to handle catch (plays animation and will auto-attach)
-            playerController.CatchObject(obj);
         }
     }
 }

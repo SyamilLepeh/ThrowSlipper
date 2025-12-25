@@ -19,7 +19,6 @@ public class PlayerController : MonoBehaviour
     [Header("Input Actions")]
     public InputActionReference moveAction;
     public InputActionReference runAction;
-    public InputActionReference takeAction;
     public InputActionReference throwAction;
 
     [Header("Object Handling")]
@@ -49,6 +48,10 @@ public class PlayerController : MonoBehaviour
     [HideInInspector] public bool recentlyThrew = false;
     [HideInInspector] public ThrowableObject objectToAttach;
 
+    // PROPERTY: CAN THROW
+    private bool canThrow => heldObject != null && canProcessThrow && !isTurningToPassTarget;
+
+
     private bool canProcessThrow = false;
     private bool isTurningToPassTarget = false;
     private float passTurnSpeed = 12f;
@@ -71,6 +74,9 @@ public class PlayerController : MonoBehaviour
     private int throwLayerIndex;
     private int takeLayerIndex;
     private int catchLayerIndex;
+
+
+
 
     void Start()
     {
@@ -104,7 +110,6 @@ public class PlayerController : MonoBehaviour
     {
         moveAction.action.Enable();
         runAction.action.Enable();
-        takeAction.action.Enable();
         throwAction.action.Enable();
     }
 
@@ -112,17 +117,24 @@ public class PlayerController : MonoBehaviour
     {
         moveAction.action.Disable();
         runAction.action.Disable();
-        takeAction.action.Disable();
         throwAction.action.Disable();
     }
 
     void Update()
     {
+        // Attach object yang reserved secara automatik sebelum check throw
+        if (objectToAttach != null && heldObject == null)
+        {
+            AttachObjectToHand(objectToAttach);
+            objectToAttach.ClearReservation();
+            objectToAttach = null;
+        }
+
+
         Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
         bool runPressed = runAction.action.IsPressed();
         bool throwHeld = throwAction.action.IsPressed();
         bool throwReleased = throwAction.action.WasReleasedThisFrame();
-        bool takePressed = takeAction.action.WasPressedThisFrame();
 
         float currentMaxVelocity = runPressed ? maximumRunVelocity : maximumWalkVelocity;
 
@@ -177,17 +189,20 @@ public class PlayerController : MonoBehaviour
                 animator.SetBool(IsThrowingFullHash, true);
         }
 
-        // === TAKE / PICK UP ===
-        if (takePressed && canPickUp && objectToAttach != null)
+        // Automatic pick-up when objectToAttach is set and not already held
+        if (objectToAttach != null && !objectToAttach.IsHeld())
         {
-            objectToAttach.Reserve(this);
+            objectToAttach.Reserve(this); // reserve the object
             canPickUp = false;
 
-            if (moveInput.magnitude > 0.1f)
+            // Trigger pick-up animation
+            if (animator.GetFloat(SpeedHash) > 0.1f)
                 animator.SetBool(IsTakeObjectHash, true);
             else
                 animator.SetBool(IsTakeObjectFullHash, true);
         }
+
+
 
         // === CATCH DETECTION ===
         if (CheckForIncomingObject() && !isCatchingInProgress)
@@ -288,6 +303,14 @@ public class PlayerController : MonoBehaviour
             if (boolHash == IsCatchingHash)
                 isCatchingInProgress = false;
         }
+    }
+
+    public void TriggerPickUpAnimation()
+    {
+        if (animator.GetFloat(SpeedHash) > 0.1f)
+            animator.SetBool(IsTakeObjectHash, true);
+        else
+            animator.SetBool(IsTakeObjectFullHash, true);
     }
 
     private bool CheckForIncomingObject() => false; // Optional
