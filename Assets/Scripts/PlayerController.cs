@@ -83,6 +83,13 @@ public class PlayerController : MonoBehaviour
         animator = GetComponent<Animator>();
         rb = GetComponent<Rigidbody>();
 
+        heldObject = null;
+        objectToAttach = null;
+        canPickUp = false;
+        isChargingPass = false;
+        passPowerLocked = false;
+        isTurningToPassTarget = false;
+
         // Animator hashes
         SpeedHash = Animator.StringToHash("Speed");
         IsThrowingHash = Animator.StringToHash("isThrowing");
@@ -122,15 +129,6 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
-        // Attach object yang reserved secara automatik sebelum check throw
-        if (objectToAttach != null && heldObject == null)
-        {
-            AttachObjectToHand(objectToAttach);
-            objectToAttach.ClearReservation();
-            objectToAttach = null;
-        }
-
-
         Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
         bool runPressed = runAction.action.IsPressed();
         bool throwHeld = throwAction.action.IsPressed();
@@ -318,7 +316,11 @@ public class PlayerController : MonoBehaviour
     public void AttachObjectToHand(ThrowableObject obj)
     {
         if (obj == null || rightHand == null) return;
+
         heldObject = obj;
+        obj.ClearReservation();
+        objectToAttach = null;
+
         obj.OnPickedUp(rightHand, this);
     }
 
@@ -376,10 +378,8 @@ public class PlayerController : MonoBehaviour
 
     public void AttachNearbyObjectEvent()
     {
-        if (objectToAttach == null || rightHand == null) return;
+        if (objectToAttach == null) return;
         AttachObjectToHand(objectToAttach);
-        objectToAttach.ClearReservation();
-        objectToAttach = null;
     }
 
     public void AttachCaughtObjectEvent()
@@ -462,6 +462,16 @@ public class PlayerController : MonoBehaviour
 
         StartCoroutine(AutoAttachCaughtObject(obj));
     }
+
+    public void ThrowHeldObject(Vector3 velocity, PlayerController target = null)
+    {
+        if (heldObject == null) return;
+
+        heldObject.OnThrown(velocity, target);
+        heldObject = null;
+        objectToAttach = null; // jaga-jaga
+    }
+
 
     private IEnumerator AutoAttachCaughtObject(ThrowableObject obj)
     {

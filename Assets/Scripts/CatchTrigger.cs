@@ -22,6 +22,8 @@ public class CatchTrigger : MonoBehaviour
             // Stop motion
             obj.StopMotion();
 
+            if (playerController.objectToAttach != null) return;
+
             // Reserve and attach automatically
             playerController.objectToAttach = obj;  // assign object to attach
             playerController.SetReadyToCatch(false);

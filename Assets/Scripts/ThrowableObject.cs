@@ -46,6 +46,8 @@ public class ThrowableObject : MonoBehaviour
 
         handOwner = null;
         passTarget = target;
+
+        isReserved = false;
     }
 
     public bool IsHeld() => handOwner != null;
@@ -54,7 +56,6 @@ public class ThrowableObject : MonoBehaviour
     public void Reserve(PlayerController owner)
     {
         isReserved = true;
-        handOwner = owner; // lock ownership sementara
     }
 
     public void ClearReservation()
