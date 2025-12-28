@@ -440,6 +440,10 @@ PrefabInstance:
       propertyPath: m_Radius
       value: 2
       objectReference: {fileID: 0}
+    - target: {fileID: 3622917951218067729, guid: 62868cd0f4b91a9458b208d2d3dedc66, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 3831883915972125626, guid: 62868cd0f4b91a9458b208d2d3dedc66, type: 3}
       propertyPath: m_LocalPosition.x
       value: 18.234175
@@ -489,8 +493,12 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4389162453797603099, guid: 62868cd0f4b91a9458b208d2d3dedc66, type: 3}
-      propertyPath: upperBodyZone
+      propertyPath: lowerBodyZone
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4389162453797603099, guid: 62868cd0f4b91a9458b208d2d3dedc66, type: 3}
+      propertyPath: upperBodyZone
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4496359008474331392, guid: 62868cd0f4b91a9458b208d2d3dedc66, type: 3}
       propertyPath: m_Name
@@ -641,13 +649,14 @@ GameObject:
   m_Component:
   - component: {fileID: 1155759486}
   - component: {fileID: 1155759487}
+  - component: {fileID: 1155759488}
   m_Layer: 0
   m_Name: LowerCatch
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1155759486
 Transform:
   m_ObjectHideFlags: 0
@@ -684,6 +693,20 @@ SphereCollider:
   serializedVersion: 3
   m_Radius: 1.5
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &1155759488
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1155759485}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5269dd82ebd45d0499e1a8bf8de5aa27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CatchTrigger
+  upperBodyZone: 0
+  lowerBodyZone: 1
 --- !u!1 &1447085435
 GameObject:
   m_ObjectHideFlags: 0
@@ -694,6 +717,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1447085436}
   - component: {fileID: 1447085437}
+  - component: {fileID: 1447085438}
   m_Layer: 0
   m_Name: LowerCatch
   m_TagString: Untagged
@@ -737,6 +761,20 @@ SphereCollider:
   serializedVersion: 3
   m_Radius: 1.5
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &1447085438
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1447085435}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5269dd82ebd45d0499e1a8bf8de5aa27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CatchTrigger
+  upperBodyZone: 0
+  lowerBodyZone: 1
 --- !u!1 &1478283065
 GameObject:
   m_ObjectHideFlags: 0
@@ -961,6 +999,14 @@ PrefabInstance:
     - target: {fileID: 3831883915972125626, guid: 62868cd0f4b91a9458b208d2d3dedc66, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4335948648020256757, guid: 62868cd0f4b91a9458b208d2d3dedc66, type: 3}
+      propertyPath: lowerBodyZone
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4335948648020256757, guid: 62868cd0f4b91a9458b208d2d3dedc66, type: 3}
+      propertyPath: upperBodyZone
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4496359008474331392, guid: 62868cd0f4b91a9458b208d2d3dedc66, type: 3}
       propertyPath: m_Name

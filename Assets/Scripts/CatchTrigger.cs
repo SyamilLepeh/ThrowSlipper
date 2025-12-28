@@ -16,7 +16,7 @@ public class CatchTrigger : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        
+        if (playerController.isCatchingInProgress) return;
         if (!other.CompareTag("Throwable")) return;
 
         ThrowableObject obj = other.GetComponent<ThrowableObject>();
@@ -28,13 +28,18 @@ public class CatchTrigger : MonoBehaviour
 
             if (playerController.objectToAttach != null) return;
 
+            // Set object untuk attach
             playerController.objectToAttach = obj;
 
             // Trigger animasi catch sesuai zona
             if (upperBodyZone)
-                playerController.TriggerCatchUpper();
+            {
+                playerController.CatchUpperObject(obj); // gunakan coroutine handleCatch
+            }
             else if (lowerBodyZone)
-                playerController.TriggerCatchLower();
+            {
+                playerController.CatchLowerObject();
+            }
         }
     }
 }

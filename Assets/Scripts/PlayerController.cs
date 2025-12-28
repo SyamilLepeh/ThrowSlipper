@@ -282,6 +282,18 @@ public class PlayerController : MonoBehaviour
         animator.SetLayerWeight(layerIndex, layerWeight);
     }
 
+    private void UpdateCatchLayerWeight(ref float layerWeight, int layerIndex)
+    {
+        bool ready = animator.GetBool(IsReadyToCatchHash);
+        bool catching = isCatchingInProgress;
+        float target = (ready || catching) ? 1f : 0f;
+
+        if (!catching && !ready) target = 0f;
+
+        layerWeight = Mathf.MoveTowards(layerWeight, target, Time.deltaTime * layerBlendSpeed);
+        animator.SetLayerWeight(layerIndex, layerWeight);
+    }
+
     private void ResetAnimationState(int layerIndex, string stateName, int boolHash)
     {
         AnimatorStateInfo state = animator.GetCurrentAnimatorStateInfo(layerIndex);
@@ -410,70 +422,31 @@ public class PlayerController : MonoBehaviour
         AttachObjectToHand(objectToAttach);
     }
 
-    public void AttachCaughtObjectEvent()
-    {
-        if (objectToAttach == null) return;
-        if (rightHand == null) return;
-
-        AttachObjectToHand(objectToAttach);
-        objectToAttach.transform.position = rightHand.position;
-        objectToAttach.transform.rotation = rightHand.rotation;
-
-        objectToAttach = null;
-        ResetCatchAndPickLayers();
-    }
-
     public void SetReadyToCatch(bool ready)
     {
         animator.SetBool(IsReadyToCatchHash, ready);
     }
 
-    private void UpdateCatchLayerWeight(ref float layerWeight, int layerIndex)
+    private IEnumerator HandleCatch(ThrowableObject obj)
     {
-        if (catchFreeze)
+        if (obj == null) yield break;
+
+        obj.StopMotion();
+        objectToAttach = obj;
+        isCatchingInProgress = true;
+
+        // Smooth rotate player ke arah objek
+        Vector3 dir = obj.transform.position - transform.position;
+        dir.y = 0;
+        Quaternion targetRot = Quaternion.LookRotation(dir);
+        while (Quaternion.Angle(transform.rotation, targetRot) > 1f)
         {
-            // Kekalkan layer weight di 1 (freeze)
-            animator.SetLayerWeight(layerIndex, 1f);
-            return;
-        }
-
-        bool ready = animator.GetBool(IsReadyToCatchHash);
-        bool catching = isCatchingInProgress;
-        float target = (ready || catching) ? 1f : 0f;
-        layerWeight = Mathf.MoveTowards(layerWeight, target, Time.deltaTime * layerBlendSpeed);
-        animator.SetLayerWeight(layerIndex, layerWeight);
-    }
-
-    private IEnumerator ResetCatchLayerSmoothly()
-    {
-        float blend = animator.GetLayerWeight(catchLayerIndex);
-
-        while (blend > 0f)
-        {
-            blend -= Time.deltaTime * layerBlendSpeed; // layerBlendSpeed kawal kelajuan fade
-            animator.SetLayerWeight(catchLayerIndex, blend);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, Time.deltaTime * 8f);
             yield return null;
         }
 
-        animator.SetBool(IsCatchingHash, false);
-        isCatchingInProgress = false;
-        catchLayerWeight = 0f;
-    }
-
-    public void TriggerCatch()
-    {
-        if (!isCatchingInProgress)
-        {
-            isCatchingInProgress = true;
-            animator.SetTrigger(IsCatchingHash);
-            StartCoroutine(CatchLayerBlendRoutine());
-        }
-    }
-
-    private IEnumerator CatchLayerBlendRoutine()
-    {
+        // Fade-in catch layer
         float blend = 0f;
-
         while (blend < 1f)
         {
             blend += Time.deltaTime * layerBlendSpeed;
@@ -481,8 +454,15 @@ public class PlayerController : MonoBehaviour
             yield return null;
         }
 
-        yield return new WaitForSeconds(0.6f);
+        // Tunggu animasi catch
+        yield return new WaitForSeconds(0.0f); // delay untuk main animasi catch
 
+        // Attach object ke tangan
+        AttachObjectToHand(obj);
+
+        animator.SetLayerWeight(catchLayerIndex, 0f);
+
+        // Fade-out catch layer
         while (blend > 0f)
         {
             blend -= Time.deltaTime * layerBlendSpeed;
@@ -490,18 +470,17 @@ public class PlayerController : MonoBehaviour
             yield return null;
         }
 
+        animator.SetBool(IsCatchingHash, false);
+        animator.SetBool(IsReadyToCatchHash, false);
         isCatchingInProgress = false;
-        animator.ResetTrigger(IsCatchingHash);
+        objectToAttach = null;
     }
 
-    public void CatchObject(ThrowableObject obj)
+    public void CatchUpperObject(ThrowableObject obj)
     {
         if (obj == null || isCatchingInProgress) return;
 
-        obj.StopMotion();
-        objectToAttach = obj;
-
-        TriggerCatch();
+        StartCoroutine(HandleCatch(obj));
 
         Vector3 dir = obj.transform.position - transform.position;
         dir.y = 0;
@@ -512,17 +491,14 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-    public void CatchObjectFromTrigger(ThrowableObject obj, bool isUpper)
+    public void CatchLowerObject()
     {
-        if (obj == null || objectToAttach != null) return;
+        isPickUpInProgress = true;
 
-        obj.StopMotion();
-        objectToAttach = obj;
-
-        if (isUpper)
-            animator.SetTrigger(IsCatchingHash); // animasi catch upper
+        if (animator.GetFloat(SpeedHash) > 0.1f)
+            animator.SetBool(IsTakeObjectHash, true);
         else
-            TriggerPickUpAnimation(); // animasi pick up (catch lower)
+            animator.SetBool(IsTakeObjectFullHash, true);
     }
 
     public void ThrowHeldObject(Vector3 velocity, PlayerController target = null)
@@ -532,26 +508,6 @@ public class PlayerController : MonoBehaviour
         heldObject.OnThrown(velocity, target);
         heldObject = null;
         objectToAttach = null; // jaga-jaga
-    }
-
-
-    private IEnumerator AutoAttachCaughtObject(ThrowableObject obj)
-    {
-        yield return new WaitForSeconds(0.05f);
-
-        if (obj != null && rightHand != null)
-        {
-            AttachObjectToHand(obj);
-            obj.transform.position = rightHand.position;
-            obj.transform.rotation = rightHand.rotation;
-
-            Debug.Log($"{name} auto-attached {obj.name} after catch delay.");
-        }
-
-        objectToAttach = null;
-        isCatchingInProgress = false;
-
-        animator.SetBool(IsCatchingHash, false);
     }
 
     public void TriggerCatchUpper()
@@ -573,6 +529,4 @@ public class PlayerController : MonoBehaviour
     {
         animator.SetBool(IsReadyToCatchHash, ready);
     }
-
-
 }
