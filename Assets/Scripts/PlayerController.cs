@@ -47,6 +47,9 @@ public class PlayerController : MonoBehaviour
     [HideInInspector] public bool canPickUp = false;
     [HideInInspector] public bool recentlyThrew = false;
     [HideInInspector] public ThrowableObject objectToAttach;
+    [HideInInspector] public bool isPickUpInProgress = false;
+    [HideInInspector] public bool isCatchingInProgress = false;
+    [HideInInspector] public bool catchFreeze = false;
 
     // PROPERTY: CAN THROW
     private bool canThrow => heldObject != null && canProcessThrow && !isTurningToPassTarget;
@@ -66,7 +69,7 @@ public class PlayerController : MonoBehaviour
 
     private bool isThrowingFullBody = false;
     private bool isTakingFullBody = false;
-    private bool isCatchingInProgress = false;
+    public bool IsCatching => isCatchingInProgress;
 
     private float throwLayerWeight = 0f;
     private float takeLayerWeight = 0f;
@@ -74,9 +77,6 @@ public class PlayerController : MonoBehaviour
     private int throwLayerIndex;
     private int takeLayerIndex;
     private int catchLayerIndex;
-
-
-
 
     void Start()
     {
@@ -188,16 +188,13 @@ public class PlayerController : MonoBehaviour
         }
 
         // Automatic pick-up when objectToAttach is set and not already held
-        if (objectToAttach != null && !objectToAttach.IsHeld())
-        {
+        if (objectToAttach != null && objectToAttach.CanBePickedUpBy(this))
+            {
             objectToAttach.Reserve(this); // reserve the object
             canPickUp = false;
 
             // Trigger pick-up animation
-            if (animator.GetFloat(SpeedHash) > 0.1f)
-                animator.SetBool(IsTakeObjectHash, true);
-            else
-                animator.SetBool(IsTakeObjectFullHash, true);
+            TriggerPickUpAnimation();
         }
 
 
@@ -300,16 +297,47 @@ public class PlayerController : MonoBehaviour
 
             if (boolHash == IsCatchingHash)
                 isCatchingInProgress = false;
+            if ((boolHash == IsTakeObjectHash || boolHash == IsTakeObjectFullHash) && objectToAttach == null)
+            {
+                animator.SetBool(boolHash, false);
+                isPickUpInProgress = false; // reset flag pick-up
+            }
         }
+    }
+
+    public void ResetCatchAndPickLayers()
+    {
+        // Reset animasi catch
+        isCatchingInProgress = false;
+        catchFreeze = false;
+        animator.SetBool(IsReadyToCatchHash, false);
+        animator.SetBool(IsCatchingHash, false);
+
+        // Reset pick up layer
+        animator.SetBool(IsTakeObjectHash, false);
+        animator.SetBool(IsTakeObjectFullHash, false);
+        takeLayerWeight = 0f;
+        animator.SetLayerWeight(takeLayerIndex, 0f);
+
+        // Reset catch layer
+        throwLayerWeight = 0f;
+        animator.SetLayerWeight(throwLayerIndex, 0f);
+        catchLayerWeight = 0f;
+        animator.SetLayerWeight(catchLayerIndex, 0f);
     }
 
     public void TriggerPickUpAnimation()
     {
+        if (isPickUpInProgress) return; // jika pick-up sedang berjalan, jangan trigger lagi
+
+        isPickUpInProgress = true;
+
         if (animator.GetFloat(SpeedHash) > 0.1f)
             animator.SetBool(IsTakeObjectHash, true);
         else
             animator.SetBool(IsTakeObjectFullHash, true);
     }
+
 
     private bool CheckForIncomingObject() => false; // Optional
 
@@ -392,7 +420,7 @@ public class PlayerController : MonoBehaviour
         objectToAttach.transform.rotation = rightHand.rotation;
 
         objectToAttach = null;
-        isCatchingInProgress = false;
+        ResetCatchAndPickLayers();
     }
 
     public void SetReadyToCatch(bool ready)
@@ -402,11 +430,34 @@ public class PlayerController : MonoBehaviour
 
     private void UpdateCatchLayerWeight(ref float layerWeight, int layerIndex)
     {
+        if (catchFreeze)
+        {
+            // Kekalkan layer weight di 1 (freeze)
+            animator.SetLayerWeight(layerIndex, 1f);
+            return;
+        }
+
         bool ready = animator.GetBool(IsReadyToCatchHash);
         bool catching = isCatchingInProgress;
         float target = (ready || catching) ? 1f : 0f;
         layerWeight = Mathf.MoveTowards(layerWeight, target, Time.deltaTime * layerBlendSpeed);
         animator.SetLayerWeight(layerIndex, layerWeight);
+    }
+
+    private IEnumerator ResetCatchLayerSmoothly()
+    {
+        float blend = animator.GetLayerWeight(catchLayerIndex);
+
+        while (blend > 0f)
+        {
+            blend -= Time.deltaTime * layerBlendSpeed; // layerBlendSpeed kawal kelajuan fade
+            animator.SetLayerWeight(catchLayerIndex, blend);
+            yield return null;
+        }
+
+        animator.SetBool(IsCatchingHash, false);
+        isCatchingInProgress = false;
+        catchLayerWeight = 0f;
     }
 
     public void TriggerCatch()
@@ -459,8 +510,19 @@ public class PlayerController : MonoBehaviour
             Quaternion lookRot = Quaternion.LookRotation(dir);
             transform.rotation = Quaternion.Slerp(transform.rotation, lookRot, Time.deltaTime * 8f);
         }
+    }
 
-        StartCoroutine(AutoAttachCaughtObject(obj));
+    public void CatchObjectFromTrigger(ThrowableObject obj, bool isUpper)
+    {
+        if (obj == null || objectToAttach != null) return;
+
+        obj.StopMotion();
+        objectToAttach = obj;
+
+        if (isUpper)
+            animator.SetTrigger(IsCatchingHash); // animasi catch upper
+        else
+            TriggerPickUpAnimation(); // animasi pick up (catch lower)
     }
 
     public void ThrowHeldObject(Vector3 velocity, PlayerController target = null)
@@ -475,7 +537,7 @@ public class PlayerController : MonoBehaviour
 
     private IEnumerator AutoAttachCaughtObject(ThrowableObject obj)
     {
-        yield return new WaitForSeconds(0f);
+        yield return new WaitForSeconds(0.05f);
 
         if (obj != null && rightHand != null)
         {
@@ -488,5 +550,29 @@ public class PlayerController : MonoBehaviour
 
         objectToAttach = null;
         isCatchingInProgress = false;
+
+        animator.SetBool(IsCatchingHash, false);
     }
+
+    public void TriggerCatchUpper()
+    {
+        animator.SetTrigger(IsCatchingHash); // animasi upper body
+    }
+
+    public void TriggerCatchLower()
+    {
+        TriggerPickUpAnimation(); // animasi pick-up sama dengan catch lower
+    }
+
+    public void SetReadyToCatchUpper(bool ready)
+    {
+        animator.SetBool(IsReadyToCatchHash, ready);
+    }
+
+    public void SetReadyToCatchLower(bool ready)
+    {
+        animator.SetBool(IsReadyToCatchHash, ready);
+    }
+
+
 }

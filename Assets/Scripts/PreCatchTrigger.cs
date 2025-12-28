@@ -8,7 +8,11 @@ public class PreCatchTrigger : MonoBehaviour
     private Quaternion targetRotation;
 
     [Header("Rotation Settings")]
-    public float rotateSpeed = 5f; // kelajuan pusingan
+    public float rotateSpeed = 5f;
+
+    [Header("Trigger Settings")]
+    public bool upperBodyZone = false; // tandakan jika trigger ini untuk upper body
+    public bool lowerBodyZone = true;  // tandakan jika trigger ini untuk lower body
 
     private void Start()
     {
@@ -19,15 +23,13 @@ public class PreCatchTrigger : MonoBehaviour
     private void OnTriggerEnter(Collider other)
     {
         if (!other.CompareTag("Throwable")) return;
-
         ThrowableObject obj = other.GetComponent<ThrowableObject>();
         if (obj == null) return;
 
-        // Hanya respond kalau objek memang di-pass kepada player ini
         if (obj.passTarget != playerController) return;
 
-        // Bekukan arah pada saat masuk (supaya tidak follow objek yang bergerak)
-        Vector3 dir = (obj.transform.position - playerTransform.position);
+        // Setup rotation ke arah objek
+        Vector3 dir = obj.transform.position - playerTransform.position;
         dir.y = 0f;
         if (dir.sqrMagnitude > 0.001f)
         {
@@ -35,22 +37,28 @@ public class PreCatchTrigger : MonoBehaviour
             isRotating = true;
         }
 
-        // Set animator param: siap untuk catch (masuk CatchFreeze)
-        playerController.SetReadyToCatch(true);
+        // Tentukan animasi siap catch berdasarkan zona
+        if (upperBodyZone)
+            playerController.SetReadyToCatchUpper(true);
+        else if (lowerBodyZone)
+            playerController.SetReadyToCatchLower(true);
     }
 
     private void OnTriggerExit(Collider other)
     {
         if (!other.CompareTag("Throwable")) return;
-
         ThrowableObject obj = other.GetComponent<ThrowableObject>();
         if (obj == null) return;
-
         if (obj.passTarget != playerController) return;
 
-        // Keluar dari zone: hentikan rotate (jika belum selesai) dan reset animator param
+        playerController.catchFreeze = false;
         isRotating = false;
-        playerController.SetReadyToCatch(false);
+
+        // Reset animator param
+        if (upperBodyZone)
+            playerController.SetReadyToCatchUpper(false);
+        else if (lowerBodyZone)
+            playerController.SetReadyToCatchLower(false);
     }
 
     private void Update()

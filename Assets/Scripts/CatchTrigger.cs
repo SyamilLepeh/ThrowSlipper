@@ -5,6 +5,10 @@ public class CatchTrigger : MonoBehaviour
 {
     private PlayerController playerController;
 
+    [Header("Catch Settings")]
+    public bool upperBodyZone = false; // trigger untuk upper body
+    public bool lowerBodyZone = true;  // trigger untuk lower body
+
     private void Start()
     {
         playerController = GetComponentInParent<PlayerController>();
@@ -12,21 +16,25 @@ public class CatchTrigger : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
+        
         if (!other.CompareTag("Throwable")) return;
 
         ThrowableObject obj = other.GetComponent<ThrowableObject>();
         if (obj == null) return;
 
-        if (!obj.IsHeld())
+        if (!obj.IsHeld() && obj.passTarget == playerController)
         {
-            // Stop motion
             obj.StopMotion();
 
             if (playerController.objectToAttach != null) return;
 
-            // Reserve and attach automatically
-            playerController.objectToAttach = obj;  // assign object to attach
-            playerController.SetReadyToCatch(false);
+            playerController.objectToAttach = obj;
+
+            // Trigger animasi catch sesuai zona
+            if (upperBodyZone)
+                playerController.TriggerCatchUpper();
+            else if (lowerBodyZone)
+                playerController.TriggerCatchLower();
         }
     }
 }

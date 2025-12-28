@@ -11,6 +11,9 @@ public class ThrowableObject : MonoBehaviour
 
     [HideInInspector] public PlayerController passTarget;
 
+    public bool IsHeld() => handOwner != null;
+    public bool IsReserved() => isReserved;
+
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
@@ -50,17 +53,16 @@ public class ThrowableObject : MonoBehaviour
         isReserved = false;
     }
 
-    public bool IsHeld() => handOwner != null;
-    public bool IsReserved() => isReserved;
-
     public void Reserve(PlayerController owner)
     {
         isReserved = true;
+        handOwner = owner;
     }
 
     public void ClearReservation()
     {
         isReserved = false;
+        handOwner = null;
     }
 
     public void StopMotion()
@@ -72,6 +74,28 @@ public class ThrowableObject : MonoBehaviour
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
         }
+    }
+
+    public bool CanBePickedUpBy(PlayerController player)
+    {
+        // Jika sedang dipegang, tak boleh pickup
+        if (IsHeld())
+            return false;
+
+        // Jika sudah reserved oleh player lain, tak boleh
+        if (isReserved && handOwner != player)
+            return false;
+
+        return true;
+    }
+
+    
+
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.color = IsHeld() ? Color.red : IsReserved() ? Color.yellow : Color.green;
+        Gizmos.DrawWireSphere(transform.position, 0.3f);
     }
 
     public void SetOwner(PlayerController owner)
