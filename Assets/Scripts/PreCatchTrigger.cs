@@ -10,10 +10,6 @@ public class PreCatchTrigger : MonoBehaviour
     [Header("Rotation Settings")]
     public float rotateSpeed = 5f;
 
-    [Header("Trigger Settings")]
-    public bool upperBodyZone = false; // tandakan jika trigger ini untuk upper body
-    public bool lowerBodyZone = true;  // tandakan jika trigger ini untuk lower body
-
     private void Start()
     {
         playerController = GetComponentInParent<PlayerController>();
@@ -23,9 +19,9 @@ public class PreCatchTrigger : MonoBehaviour
     private void OnTriggerEnter(Collider other)
     {
         if (!other.CompareTag("Throwable")) return;
+
         ThrowableObject obj = other.GetComponent<ThrowableObject>();
         if (obj == null) return;
-
         if (obj.passTarget != playerController) return;
 
         // Setup rotation ke arah objek
@@ -37,28 +33,19 @@ public class PreCatchTrigger : MonoBehaviour
             isRotating = true;
         }
 
-        // Tentukan animasi siap catch berdasarkan zona
-        if (upperBodyZone)
-            playerController.SetReadyToCatchUpper(true);
-        else if (lowerBodyZone)
-            playerController.SetReadyToCatchLower(true);
+        playerController.SetReadyToCatch(true);
     }
 
     private void OnTriggerExit(Collider other)
     {
         if (!other.CompareTag("Throwable")) return;
+
         ThrowableObject obj = other.GetComponent<ThrowableObject>();
         if (obj == null) return;
         if (obj.passTarget != playerController) return;
 
-        playerController.catchFreeze = false;
         isRotating = false;
-
-        // Reset animator param
-        if (upperBodyZone)
-            playerController.SetReadyToCatchUpper(false);
-        else if (lowerBodyZone)
-            playerController.SetReadyToCatchLower(false);
+        playerController.SetReadyToCatch(false);
     }
 
     private void Update()

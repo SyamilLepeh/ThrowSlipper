@@ -18,7 +18,7 @@ public class PickUpTrigger : MonoBehaviour
         if (obj == null) return;
 
         // PRIORITY CHECK: skip pick-up jika object berada dalam catch zone
-        if (playerController.IsCatching || playerController.objectToAttach != null)
+        if (playerController.isCatchingUpperInProgress || playerController.isCatchingLowerInProgress || playerController.objectToAttach != null)
             return;
 
         if (!obj.CanBePickedUpBy(playerController)) return;
@@ -31,7 +31,6 @@ public class PickUpTrigger : MonoBehaviour
         // Start pick-up animation automatically
         playerController.TriggerPickUpAnimation();
     }
-
 
     private void OnTriggerExit(Collider other)
     {

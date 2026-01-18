@@ -7,7 +7,7 @@ public class CatchTrigger : MonoBehaviour
 
     [Header("Catch Settings")]
     public bool upperBodyZone = false; // trigger untuk upper body
-    public bool lowerBodyZone = true;  // trigger untuk lower body
+    public bool lowerBodyZone = false;  // trigger untuk lower body
 
     private void Start()
     {
@@ -16,30 +16,31 @@ public class CatchTrigger : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        if (playerController.isCatchingInProgress) return;
         if (!other.CompareTag("Throwable")) return;
+
+        // ✅ check dengan flag baru
+        if (playerController.isCatchingUpperInProgress || playerController.isCatchingLowerInProgress) return;
 
         ThrowableObject obj = other.GetComponent<ThrowableObject>();
         if (obj == null) return;
+        if (obj.passTarget != playerController) return;
 
-        if (!obj.IsHeld() && obj.passTarget == playerController)
-        {
-            obj.StopMotion();
+        // Stop object
+        obj.StopMotion();
 
-            if (playerController.objectToAttach != null) return;
+        // Simpan untuk attach (Animation Event akan attach)
+        playerController.objectToAttach = obj;
 
-            // Set object untuk attach
-            playerController.objectToAttach = obj;
+        // Set flag yang sesuai
+        if (upperBodyZone)
+            playerController.isCatchingUpperInProgress = true;
+        else if (lowerBodyZone)
+            playerController.isCatchingLowerInProgress = true;
 
-            // Trigger animasi catch sesuai zona
-            if (upperBodyZone)
-            {
-                playerController.CatchUpperObject(obj); // gunakan coroutine handleCatch
-            }
-            else if (lowerBodyZone)
-            {
-                playerController.CatchLowerObject();
-            }
-        }
+        // Trigger animation sahaja
+        if (upperBodyZone)
+            playerController.TriggerCatchUpper();
+        else if (lowerBodyZone)
+            playerController.TriggerCatchLower();
     }
 }
