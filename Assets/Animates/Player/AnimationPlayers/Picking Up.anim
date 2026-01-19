@@ -41605,7 +41605,7 @@ AnimationClip:
     m_AdditiveReferencePoseClip: {fileID: 0}
     m_AdditiveReferencePoseTime: 0
     m_StartTime: 0
-    m_StopTime: 6.1333337
+    m_StopTime: 6.1666665
     m_OrientationOffsetY: 0
     m_Level: 0
     m_CycleOffset: 0
@@ -82031,6 +82031,13 @@ AnimationClip:
   m_Events:
   - time: 2.4333334
     functionName: AttachNearbyObjectEvent
+    data: 
+    objectReferenceParameter: {fileID: 0}
+    floatParameter: 0
+    intParameter: 0
+    messageOptions: 0
+  - time: 6.1666665
+    functionName: ResetCatchAndPickLayers
     data: 
     objectReferenceParameter: {fileID: 0}
     floatParameter: 0
