@@ -14,7 +14,7 @@ public class PlayerController : MonoBehaviour
     public float maximumWalkVelocity = 6.5f;
     public float maximumRunVelocity = 12.0f;
     public float rotationSpeed = 10.0f;
-    public float layerBlendSpeed = 5.0f;
+    public float layerBlendSpeed = 6.0f;
 
     [Header("Input Actions")]
     public InputActionReference moveAction;
@@ -475,7 +475,5 @@ public class PlayerController : MonoBehaviour
     public void EndCatchLowerEvent()
     {
         isCatchingLowerInProgress = false;
-    }
-
-    
+    } 
 }
