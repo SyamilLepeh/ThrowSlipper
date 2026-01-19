@@ -4,11 +4,15 @@ public class PreCatchTrigger : MonoBehaviour
 {
     private PlayerController playerController;
     private Transform playerTransform;
-    private bool isRotating = false;
-    private Quaternion targetRotation;
 
     [Header("Rotation Settings")]
     public float rotateSpeed = 5f;
+
+    private bool isRotating = false;
+    private Quaternion targetRotation;
+
+    // Track objek yang sedang “ready”
+    private ThrowableObject trackedObj = null;
 
     private void Start()
     {
@@ -20,11 +24,15 @@ public class PreCatchTrigger : MonoBehaviour
     {
         if (!other.CompareTag("Throwable")) return;
 
-        ThrowableObject obj = other.GetComponent<ThrowableObject>();
+        var obj = other.GetComponent<ThrowableObject>();
         if (obj == null) return;
+
+        // Hanya ready kalau bola ini memang ditujukan kepada player ini
         if (obj.passTarget != playerController) return;
 
-        // Setup rotation ke arah objek
+        trackedObj = obj;
+
+        // Rotate ke arah objek
         Vector3 dir = obj.transform.position - playerTransform.position;
         dir.y = 0f;
         if (dir.sqrMagnitude > 0.001f)
@@ -34,22 +42,35 @@ public class PreCatchTrigger : MonoBehaviour
         }
 
         playerController.SetReadyToCatch(true);
+        playerController.StartReadyCatchTimeout(6f); // optional (kalau awak guna)
     }
 
     private void OnTriggerExit(Collider other)
     {
         if (!other.CompareTag("Throwable")) return;
 
-        ThrowableObject obj = other.GetComponent<ThrowableObject>();
+        var obj = other.GetComponent<ThrowableObject>();
         if (obj == null) return;
-        if (obj.passTarget != playerController) return;
 
-        isRotating = false;
-        playerController.SetReadyToCatch(false);
+        // Penting: hanya cancel kalau objek yang keluar itu memang yang kita track
+        if (trackedObj != obj) return;
+
+        CancelReady();
     }
 
     private void Update()
     {
+        // Jika tiada objek untuk track, tak buat apa-apa
+        if (trackedObj == null) return;
+
+        // Kalau tiba-tiba bola dah bukan target kita (contoh Player A ambil / passTarget berubah)
+        if (trackedObj.passTarget != playerController)
+        {
+            CancelReady();
+            return;
+        }
+
+        // Rotation smoothing
         if (!isRotating) return;
 
         playerTransform.rotation = Quaternion.Lerp(
@@ -63,5 +84,12 @@ public class PreCatchTrigger : MonoBehaviour
             playerTransform.rotation = targetRotation;
             isRotating = false;
         }
+    }
+
+    private void CancelReady()
+    {
+        trackedObj = null;
+        isRotating = false;
+        playerController.SetReadyToCatch(false);
     }
 }

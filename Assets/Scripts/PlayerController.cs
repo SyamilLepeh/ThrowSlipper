@@ -249,8 +249,13 @@ public class PlayerController : MonoBehaviour
 
     private void UpdateCatchLayerWeight(ref float layerWeight, int layerIndex)
     {
+        bool ready = animator.GetBool(IsReadyToCatchHash);
         bool catching = isCatchingUpperInProgress || isCatchingLowerInProgress;
-        float target = catching ? 1f : 0f;
+
+        // CatchLayer aktif jika READY atau sedang CATCH
+        float target = (ready || catching) ? 1f : 0f;
+
+        // Blend
         layerWeight = Mathf.MoveTowards(layerWeight, target, Time.deltaTime * layerBlendSpeed);
         animator.SetLayerWeight(layerIndex, layerWeight);
     }
@@ -319,6 +324,9 @@ public class PlayerController : MonoBehaviour
     {
         if (obj == null || isCatchingUpperInProgress) return;
 
+        // Matikan ready bila catch bermula
+        animator.SetBool(IsReadyToCatchHash, false);
+
         obj.StopMotion();
         objectToAttach = obj;
         isCatchingUpperInProgress = true;
@@ -331,6 +339,9 @@ public class PlayerController : MonoBehaviour
     {
         if (obj == null || isCatchingLowerInProgress) return;
 
+        // Matikan ready bila catch bermula
+        animator.SetBool(IsReadyToCatchHash, false);
+
         obj.StopMotion();
         objectToAttach = obj;
         isCatchingLowerInProgress = true;
@@ -338,6 +349,7 @@ public class PlayerController : MonoBehaviour
         StartCoroutine(RotateTowardsObject(obj.transform, false));
         TriggerCatchLower();
     }
+
 
     private IEnumerator RotateTowardsObject(Transform target, bool isUpper)
     {
@@ -422,10 +434,48 @@ public class PlayerController : MonoBehaviour
 
     public void SetReadyToCatch(bool ready)
     {
-        animator.SetBool(IsReadyToCatchHash, ready);
+        // Jangan tunjuk ready kalau sedang catch / pickup / anim full body
+        if (isPickUpInProgress || isCatchingUpperInProgress || isCatchingLowerInProgress || isThrowingFullBody || isTakingFullBody)
+            ready = false;
 
-        float targetWeight = ready ? 1f : 0f;
-        catchLayerWeight = Mathf.MoveTowards(catchLayerWeight, targetWeight, Time.deltaTime * layerBlendSpeed);
-        animator.SetLayerWeight(catchLayerIndex, catchLayerWeight);
+        animator.SetBool(IsReadyToCatchHash, ready);
     }
+
+    private Coroutine readyTimeoutCo;
+
+    public void StartReadyCatchTimeout(float seconds)
+    {
+        if (readyTimeoutCo != null) StopCoroutine(readyTimeoutCo);
+        readyTimeoutCo = StartCoroutine(ReadyCatchTimeout(seconds));
+    }
+
+    private IEnumerator ReadyCatchTimeout(float seconds)
+    {
+        float t = 0f;
+        while (t < seconds)
+        {
+            // Kalau catch dah start / attach dah berlaku, stop timeout
+            if (isCatchingUpperInProgress || isCatchingLowerInProgress || heldObject != null)
+                yield break;
+
+            t += Time.deltaTime;
+            yield return null;
+        }
+
+        SetReadyToCatch(false);
+    }
+
+    public void EndCatchUpperEvent()
+    {
+        isCatchingUpperInProgress = false;
+
+        // bila catch habis, biar layer turun semula (UpdateCatchLayerWeight akan handle)
+    }
+
+    public void EndCatchLowerEvent()
+    {
+        isCatchingLowerInProgress = false;
+    }
+
+    
 }

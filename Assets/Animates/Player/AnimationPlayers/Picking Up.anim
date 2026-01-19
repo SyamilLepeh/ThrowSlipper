@@ -82037,7 +82037,7 @@ AnimationClip:
     intParameter: 0
     messageOptions: 0
   - time: 6.1666665
-    functionName: ResetCatchAndPickLayers
+    functionName: EndCatchLowerEvent
     data: 
     objectReferenceParameter: {fileID: 0}
     floatParameter: 0
