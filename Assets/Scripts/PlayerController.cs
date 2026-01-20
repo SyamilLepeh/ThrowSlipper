@@ -37,6 +37,29 @@ public class PlayerController : MonoBehaviour
     public float minPassPower = 0.2f;
     public float passChargeSpeed = 1f;
 
+    [Header("Pass Aim Rules")]
+    public float passMaxAngle = 35f;      // cone aim (contoh sukan: 25-45 deg)
+    public float passMaxDistance = 50f;   // jarak max pass
+    public bool requireLineOfSight = false;
+    public LayerMask lineOfSightMask = ~0; // optional
+
+    [Header("Pass Feel (Tap vs Hold)")]
+    public float tapThreshold = 0.15f;        // bawah ni kira "tap"
+    public float fullChargeTime = 0.9f;       // hold sampai max
+
+    public float tapPower = 0.35f;            // kuasa bila tap
+    public float minHoldPower = 0.35f;        // kuasa minimum bila hold (biasanya sama tap)
+    public float maxHoldPower = 1.5f;         // kuasa max
+
+    public float slowPassTime = 0.85f;        // tap: masa sampai target (slow tapi logik)
+    public float fastPassTime = 0.45f;        // hold: masa sampai target (laju)
+
+    public AnimationCurve chargeCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
+
+    private float chargeStartTime = 0f;
+    private float finalPassPower = 1f;
+    private float finalPassTime = 0.8f;
+
     private float currentPassPower = 0f;
     private bool isChargingPass = false;
     private bool passPowerLocked = false;
@@ -147,20 +170,52 @@ public class PlayerController : MonoBehaviour
             transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(direction), Time.deltaTime * rotationSpeed);
         }
 
-        // PASS POWER
+        // PASS POWER (Tap vs Hold)
         if (throwHeld && heldObject != null && canProcessThrow && !passPowerLocked)
         {
-            isChargingPass = true;
-            currentPassPower += Time.deltaTime * passChargeSpeed;
-            currentPassPower = Mathf.Clamp(currentPassPower, minPassPower, maxPassPower);
+            if (!isChargingPass)
+            {
+                isChargingPass = true;
+                chargeStartTime = Time.time;
+                currentPassPower = 0f;
+            }
+
+            float heldTime = Time.time - chargeStartTime;
+            float t = Mathf.Clamp01(heldTime / fullChargeTime);
+            float curved = chargeCurve.Evaluate(t);
+
+            // Preview/charging value (optional)
+            currentPassPower = Mathf.Lerp(minHoldPower, maxHoldPower, curved);
         }
 
         if (throwReleased && isChargingPass)
         {
             isChargingPass = false;
             passPowerLocked = true;
-            if (passTarget != null) isTurningToPassTarget = true;
+
+            float heldTime = Time.time - chargeStartTime;
+
+            if (heldTime <= tapThreshold)
+            {
+                // ✅ TAP: slow, normal pass (tak terapung lama)
+                finalPassPower = tapPower;
+                finalPassTime = slowPassTime;
+            }
+            else
+            {
+                // ✅ HOLD: semakin lama, semakin laju & kuat
+                float t = Mathf.Clamp01(heldTime / fullChargeTime);
+                float curved = chargeCurve.Evaluate(t);
+
+                finalPassPower = Mathf.Lerp(minHoldPower, maxHoldPower, curved);
+                finalPassTime = Mathf.Lerp(slowPassTime, fastPassTime, curved);
+            }
+
+            // ❌ Jangan auto turn (kalau kau ikut aim cone)
+            isTurningToPassTarget = false;
         }
+
+
 
         // THROW ANIMATION
         if (passPowerLocked && heldObject != null && canProcessThrow && !isTurningToPassTarget)
@@ -392,20 +447,42 @@ public class PlayerController : MonoBehaviour
     {
         if (heldObject == null) return;
 
-        heldObject.transform.SetParent(null);
-        heldObject.GetComponent<Rigidbody>().isKinematic = false;
-        heldObject.GetComponent<Collider>().enabled = true;
+        // ✅ Decide PASS vs THROW-FORWARD based on facing angle
+        bool doPass = (passTarget != null) && CanPassToTarget(passTarget);
 
-        Vector3 targetPoint = passTargetCatchPoint != null ? passTargetCatchPoint.position :
-                              (passTarget != null ? passTarget.position + Vector3.up * 1.5f : transform.position + transform.forward * throwDistance + Vector3.up * throwHeight);
+        Vector3 targetPoint;
+        PlayerController teammate = null;
 
-        PlayerController teammate = passTarget != null ? passTarget.GetComponent<PlayerController>() : null;
-        Vector3 throwVelocity = CalculateThrowVelocity(heldObject.transform.position, targetPoint, throwTime) * currentPassPower;
+        if (doPass)
+        {
+            targetPoint = (passTargetCatchPoint != null)
+                ? passTargetCatchPoint.position
+                : passTarget.position + Vector3.up * 1.5f;
 
-        heldObject.OnThrown(throwVelocity, teammate);
+            teammate = passTarget.GetComponent<PlayerController>();
+
+            // optional: bagi teammate masuk "ready catch" sekejap
+            if (teammate != null)
+            {
+                teammate.SetReadyToCatch(true);
+                teammate.StartReadyCatchTimeout(1.0f);
+            }
+        }
+        else
+        {
+            // throw biasa ke depan
+            targetPoint = transform.position
+                + transform.forward * throwDistance
+                + Vector3.up * throwHeight;
+        }
+
+        Vector3 throwVelocity = CalculateThrowVelocity(heldObject.transform.position, targetPoint, throwTime) * currentPassPower; 
+
+        heldObject.OnThrown(throwVelocity, doPass ? teammate : null);
 
         heldObject = null;
         canPickUp = false;
+
         animator.SetBool(IsThrowingHash, false);
         animator.SetBool(IsThrowingFullHash, false);
 
@@ -413,9 +490,14 @@ public class PlayerController : MonoBehaviour
         StartCoroutine(EnableThrowInput());
         StartCoroutine(ThrowCooldown());
 
+        finalPassPower = 1f;
+        finalPassTime = throwTime;   // fallback ke default
         currentPassPower = 0f;
         passPowerLocked = false;
+
+
     }
+
 
     private IEnumerator ThrowCooldown()
     {
@@ -475,5 +557,76 @@ public class PlayerController : MonoBehaviour
     public void EndCatchLowerEvent()
     {
         isCatchingLowerInProgress = false;
-    } 
+    }
+
+    private bool CanPassToTarget(Transform target)
+    {
+        if (target == null) return false;
+
+        Vector3 toTarget = target.position - transform.position;
+        toTarget.y = 0f;
+
+        float dist = toTarget.magnitude;
+        if (dist < 0.01f || dist > passMaxDistance) return false;
+
+        Vector3 dir = toTarget / dist; // normalized
+        float angle = Vector3.Angle(transform.forward, dir);
+        if (angle > passMaxAngle) return false;
+
+        if (requireLineOfSight)
+        {
+            Vector3 origin = transform.position + Vector3.up * 1.2f;
+            Vector3 dest = target.position + Vector3.up * 1.2f;
+            if (Physics.Linecast(origin, dest, out RaycastHit hit, lineOfSightMask))
+            {
+                // kalau hit sesuatu sebelum target, tak boleh pass
+                if (hit.transform != target && !hit.transform.IsChildOf(target))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        // elak error bila belum start
+        if (!enabled) return;
+
+        Gizmos.color = Color.cyan;
+
+        Vector3 origin = transform.position + Vector3.up * 0.1f;
+        Vector3 forward = transform.forward;
+
+        // Garis tengah (arah player)
+        Gizmos.DrawLine(origin, origin + forward * passMaxDistance);
+
+        // Kira arah kiri & kanan berdasarkan passMaxAngle
+        Quaternion leftRot = Quaternion.AngleAxis(-passMaxAngle, Vector3.up);
+        Quaternion rightRot = Quaternion.AngleAxis(passMaxAngle, Vector3.up);
+
+        Vector3 leftDir = leftRot * forward;
+        Vector3 rightDir = rightRot * forward;
+
+        // Garis cone kiri & kanan
+        Gizmos.DrawLine(origin, origin + leftDir * passMaxDistance);
+        Gizmos.DrawLine(origin, origin + rightDir * passMaxDistance);
+
+        // Optional: lukis arc (nampak lebih jelas)
+        int segments = 20;
+        Vector3 prevPoint = origin + leftDir * passMaxDistance;
+
+        for (int i = 1; i <= segments; i++)
+        {
+            float t = i / (float)segments;
+            float angle = Mathf.Lerp(-passMaxAngle, passMaxAngle, t);
+            Vector3 dir = Quaternion.AngleAxis(angle, Vector3.up) * forward;
+            Vector3 point = origin + dir * passMaxDistance;
+
+            Gizmos.DrawLine(prevPoint, point);
+            prevPoint = point;
+        }
+    }
+
+
 }
