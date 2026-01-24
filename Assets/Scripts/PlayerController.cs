@@ -56,6 +56,12 @@ public class PlayerController : MonoBehaviour
 
     public AnimationCurve chargeCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
 
+    [Header("Upper Aim (Shoulder Only)")]
+    public Transform rightShoulder;     // assign: RightShoulder (Humanoid)
+    public float aimTurnSpeed = 10f;
+    public float maxAimYaw = 35f;       // jangan over twist
+    private Quaternion shoulderDefaultLocalRot;
+
     private float chargeStartTime = 0f;
     private float finalPassPower = 1f;
     private float finalPassTime = 0.8f;
@@ -99,6 +105,9 @@ public class PlayerController : MonoBehaviour
 
     void Start()
     {
+        if (rightShoulder != null)
+            shoulderDefaultLocalRot = rightShoulder.localRotation;
+
         animator = GetComponent<Animator>();
         rb = GetComponent<Rigidbody>();
 
@@ -213,6 +222,9 @@ public class PlayerController : MonoBehaviour
 
             // ❌ Jangan auto turn (kalau kau ikut aim cone)
             isTurningToPassTarget = false;
+
+            currentPassPower = finalPassPower;   // ✅ gunakan power final (tap/hold)
+
         }
 
 
@@ -287,6 +299,8 @@ public class PlayerController : MonoBehaviour
                     animator.SetBool(IsThrowingFullHash, true);
             }
         }
+
+        HandleShoulderAim();
     }
 
     private IEnumerator EnableThrowInput()
@@ -447,38 +461,59 @@ public class PlayerController : MonoBehaviour
     {
         if (heldObject == null) return;
 
-        // ✅ Decide PASS vs THROW-FORWARD based on facing angle
         bool doPass = (passTarget != null) && CanPassToTarget(passTarget);
 
         Vector3 targetPoint;
         PlayerController teammate = null;
 
+        // 🔒 LOCK power & time (tap / hold)
+        float powerToUse = finalPassPower;
+        float timeToTarget = finalPassTime;
+
         if (doPass)
         {
-            targetPoint = (passTargetCatchPoint != null)
+            targetPoint = passTargetCatchPoint != null
                 ? passTargetCatchPoint.position
                 : passTarget.position + Vector3.up * 1.5f;
 
             teammate = passTarget.GetComponent<PlayerController>();
 
-            // optional: bagi teammate masuk "ready catch" sekejap
             if (teammate != null)
             {
                 teammate.SetReadyToCatch(true);
-                teammate.StartReadyCatchTimeout(1.0f);
+                teammate.StartReadyCatchTimeout(1f);
             }
         }
         else
         {
-            // throw biasa ke depan
+            // guna jarak teammate (XZ) untuk “feel” sama laju macam pass
+            float forwardDist = 10f;
+
+            if (passTarget != null)
+            {
+                Vector3 toT = passTarget.position - transform.position;
+                toT.y = 0f;
+                forwardDist = Mathf.Clamp(toT.magnitude, 6f, passMaxDistance);
+            }
+            else
+            {
+                forwardDist = Mathf.Clamp(passMaxDistance * 0.4f, 6f, passMaxDistance);
+            }
+
             targetPoint = transform.position
-                + transform.forward * throwDistance
+                + transform.forward * forwardDist
                 + Vector3.up * throwHeight;
         }
 
-        Vector3 throwVelocity = CalculateThrowVelocity(heldObject.transform.position, targetPoint, throwTime) * currentPassPower; 
 
-        heldObject.OnThrown(throwVelocity, doPass ? teammate : null);
+        Vector3 velocity =
+            CalculateThrowVelocity(
+                heldObject.transform.position,
+                targetPoint,
+                timeToTarget
+            ) * powerToUse;
+
+        heldObject.OnThrown(velocity, doPass ? teammate : null);
 
         heldObject = null;
         canPickUp = false;
@@ -490,13 +525,12 @@ public class PlayerController : MonoBehaviour
         StartCoroutine(EnableThrowInput());
         StartCoroutine(ThrowCooldown());
 
+        // reset
         finalPassPower = 1f;
-        finalPassTime = throwTime;   // fallback ke default
-        currentPassPower = 0f;
+        finalPassTime = throwTime;
         passPowerLocked = false;
-
-
     }
+
 
 
     private IEnumerator ThrowCooldown()
@@ -627,6 +661,42 @@ public class PlayerController : MonoBehaviour
             prevPoint = point;
         }
     }
+
+    void HandleShoulderAim()
+    {
+        if (rightShoulder == null) return;
+
+        // aim hanya bila ada heldObject + pass valid + sedang throw charge / locked
+        if (heldObject == null || passTarget == null) { ResetShoulderAim(); return; }
+        if (!CanPassToTarget(passTarget)) { ResetShoulderAim(); return; }
+
+        Vector3 toT = passTarget.position - transform.position;
+        toT.y = 0f;
+        if (toT.sqrMagnitude < 0.01f) { ResetShoulderAim(); return; }
+
+        // target yaw relative to player forward
+        float yaw = Vector3.SignedAngle(transform.forward, toT.normalized, Vector3.up);
+        yaw = Mathf.Clamp(yaw, -maxAimYaw, maxAimYaw);
+
+        Quaternion targetLocal = shoulderDefaultLocalRot * Quaternion.Euler(0f, yaw, 0f);
+
+        rightShoulder.localRotation = Quaternion.Slerp(
+            rightShoulder.localRotation,
+            targetLocal,
+            Time.deltaTime * aimTurnSpeed
+        );
+    }
+
+    void ResetShoulderAim()
+    {
+        if (rightShoulder == null) return;
+        rightShoulder.localRotation = Quaternion.Slerp(
+            rightShoulder.localRotation,
+            shoulderDefaultLocalRot,
+            Time.deltaTime * aimTurnSpeed
+        );
+    }
+
 
 
 }
