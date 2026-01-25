@@ -28,9 +28,20 @@ public class PlayerController : MonoBehaviour
     [Header("Object Handling")]
     public ThrowableObject heldObject;
     public Transform rightHand;
-    public float throwTime = 0.8f;
-    public float throwDistance = 5f;
-    public float throwHeight = 1f;
+
+    [Tooltip("Arc height (higher = more curve)")]
+    public float throwHeight = 2.0f;      // dulu 1f, naik sikit untuk arc cantik
+
+    [Tooltip("Overall throw speed multiplier (applies to pass & throw)")]
+    public float objectThrowSpeed = 1.0f; // ✅ speed baru
+
+    [Header("Arc Tuning (Distance Based)")]
+    public float arcMinHeight = 1.2f;   // dekat
+    public float arcMaxHeight = 2.6f;   // jauh (limit supaya tak melambung)
+    public float arcMaxDistance = 30f;  // jarak yang dianggap "jauh" untuk cap
+    public AnimationCurve arcByDistance = AnimationCurve.EaseInOut(0, 0, 1, 1);
+
+
 
     [Header("Passing System")]
     public Transform passTarget;
@@ -112,12 +123,6 @@ public class PlayerController : MonoBehaviour
     private bool isThrowingFullBody = false;
     private bool isTakingFullBody = false;
 
-    // AimLayer (Additive)
-    private int IsAimingHash;
-    private int aimLayerIndex = -1;
-    private float aimLayerWeight = 0f;
-    private bool wantAim = false;
-
     private float throwLayerWeight = 0f;
     private float takeLayerWeight = 0f;
     private float catchLayerWeight = 0f;
@@ -146,17 +151,13 @@ public class PlayerController : MonoBehaviour
         IsCatchingLowerHash = Animator.StringToHash("isCatchingLower");
         IsReadyToCatchHash = Animator.StringToHash("isReadyToCatch");
 
-        IsAimingHash = Animator.StringToHash("isAiming");
-
         throwLayerIndex = animator.GetLayerIndex("ThrowLayer");
         takeLayerIndex = animator.GetLayerIndex("TakeObjectLayer");
         catchLayerIndex = animator.GetLayerIndex("CatchLayer");
-        aimLayerIndex = animator.GetLayerIndex("AimLayer");
 
         if (throwLayerIndex != -1) animator.SetLayerWeight(throwLayerIndex, 0f);
         if (takeLayerIndex != -1) animator.SetLayerWeight(takeLayerIndex, 0f);
         if (catchLayerIndex != -1) animator.SetLayerWeight(catchLayerIndex, 0f);
-        if (aimLayerIndex != -1) animator.SetLayerWeight(aimLayerIndex, 0f);
 
         StartCoroutine(EnableThrowInput());
 
@@ -349,30 +350,10 @@ public class PlayerController : MonoBehaviour
             TriggerPickUpAnimation();
         }
 
-        // ===== AIM LAYER (PASS ONLY) =====
-        wantAim =
-            aimLayerIndex != -1 &&
-            heldObject != null &&
-            passTarget != null &&
-            CanPassToTarget(passTarget) &&
-            (isChargingPass || passPowerLocked) &&
-            !isThrowingFullBody && !isTakingFullBody &&
-            !isCatchingUpperInProgress && !isCatchingLowerInProgress &&
-            !doAttackThrow;
-
-        animator.SetBool(IsAimingHash, wantAim);
-
         // ===== LAYER BLENDING =====
         if (throwLayerIndex != -1) UpdateLayerWeight(IsThrowingHash, ref throwLayerWeight, throwLayerIndex);
         if (takeLayerIndex != -1) UpdateLayerWeight(IsTakeObjectHash, ref takeLayerWeight, takeLayerIndex);
         if (catchLayerIndex != -1) UpdateCatchLayerWeight(ref catchLayerWeight, catchLayerIndex);
-
-        if (aimLayerIndex != -1)
-        {
-            float aimTarget = wantAim ? 1f : 0f;
-            aimLayerWeight = Mathf.MoveTowards(aimLayerWeight, aimTarget, Time.deltaTime * layerBlendSpeed);
-            animator.SetLayerWeight(aimLayerIndex, aimLayerWeight);
-        }
 
         // RESET STATE
         if (throwLayerIndex != -1) ResetAnimationState(throwLayerIndex, "Throw_Run", IsThrowingHash);
@@ -562,26 +543,25 @@ public class PlayerController : MonoBehaviour
         PlayerController teammate = null;
 
         float powerToUse;
-        float timeToTarget;
 
         if (isAttack)
         {
             powerToUse = finalAttackPower;
-            timeToTarget = finalAttackTime;
 
             float dist = Mathf.Lerp(attackForwardMinDist, attackForwardMaxDist, finalAttackCharge01);
-            targetPoint = transform.position + transform.forward * dist + Vector3.up * attackForwardHeight;
+
+            // ✅ DESTINATION sahaja (arc akan naikkan)
+            targetPoint = transform.position + transform.forward * dist;
         }
         else
         {
             powerToUse = finalPassPower;
-            timeToTarget = finalPassTime;
 
             if (doPass)
             {
                 targetPoint = passTargetCatchPoint != null
                     ? passTargetCatchPoint.position
-                    : passTarget.position + Vector3.up * 1.5f;
+                    : passTarget.position + Vector3.up * 1.2f; // fallback ringan
 
                 teammate = passTarget.GetComponent<PlayerController>();
                 if (teammate != null)
@@ -595,8 +575,8 @@ public class PlayerController : MonoBehaviour
             }
             else
             {
-                // forward fallback (same feel)
-                float forwardDist = 10f;
+                // ✅ forward fallback bila tak boleh pass (ikut jarak ke passTarget kalau ada)
+                float forwardDist;
 
                 if (passTarget != null)
                 {
@@ -609,11 +589,15 @@ public class PlayerController : MonoBehaviour
                     forwardDist = Mathf.Clamp(passMaxDistance * 0.4f, 6f, passMaxDistance);
                 }
 
-                targetPoint = transform.position + transform.forward * forwardDist + Vector3.up * throwHeight;
+                targetPoint = transform.position + transform.forward * forwardDist;
             }
         }
 
-        Vector3 velocity = CalculateThrowVelocity(heldObject.transform.position, targetPoint, timeToTarget) * powerToUse;
+        // ✅ ARC THROW (apply untuk PASS & ATTACK)
+        Vector3 velocity =
+            CalculateThrowVelocityArc(heldObject.transform.position, targetPoint, throwHeight)
+            * powerToUse
+            * objectThrowSpeed;
 
         heldObject.OnThrown(velocity, doPass ? teammate : null);
 
@@ -632,14 +616,14 @@ public class PlayerController : MonoBehaviour
 
         // reset PASS
         finalPassPower = 1f;
-        finalPassTime = throwTime;
+        finalPassTime = 0.8f;     // (kalau kau nak, boleh buang variable ni terus)
         finalPassCharge01 = 0f;
         passPowerLocked = false;
         isChargingPass = false;
 
         // reset ATTACK
         finalAttackPower = 1f;
-        finalAttackTime = 0.6f;
+        finalAttackTime = 0.6f;   // (kalau kau nak, boleh buang variable ni terus)
         finalAttackCharge01 = 0f;
         attackPowerLocked = false;
         isChargingAttack = false;
@@ -649,6 +633,7 @@ public class PlayerController : MonoBehaviour
         PlayerControlManager.Instance?.RefreshPickupAreas();
     }
 
+
     private IEnumerator ThrowCooldown()
     {
         recentlyThrew = true;
@@ -656,13 +641,36 @@ public class PlayerController : MonoBehaviour
         recentlyThrew = false;
     }
 
-    private Vector3 CalculateThrowVelocity(Vector3 origin, Vector3 target, float timeToTarget)
+    private Vector3 CalculateThrowVelocityArc(Vector3 origin, Vector3 target, float baseHeight)
     {
-        Vector3 displacementXZ = new Vector3(target.x - origin.x, 0, target.z - origin.z);
-        Vector3 velocityXZ = displacementXZ / timeToTarget;
-        float velocityY = (target.y - origin.y) / timeToTarget - 0.5f * Physics.gravity.y * timeToTarget;
+        float g = Physics.gravity.y; // negative
+
+        // distance on XZ
+        Vector3 toTargetXZ = target - origin;
+        toTargetXZ.y = 0f;
+        float dist = toTargetXZ.magnitude;
+
+        // ✅ arc height ikut jarak (clamped)
+        float d01 = Mathf.Clamp01(dist / Mathf.Max(0.01f, arcMaxDistance));
+        float curved = arcByDistance != null ? arcByDistance.Evaluate(d01) : d01;
+
+        // baseHeight (throwHeight) still acts like "overall arc feel"
+        float arcHeight = Mathf.Lerp(arcMinHeight, arcMaxHeight, curved) * Mathf.Max(0.01f, baseHeight);
+
+        // ✅ Pick an apex above the higher of origin/target
+        float apexY = Mathf.Max(origin.y, target.y) + Mathf.Max(0.01f, arcHeight);
+
+        float timeUp = Mathf.Sqrt(2f * (apexY - origin.y) / -g);
+        float timeDown = Mathf.Sqrt(2f * (apexY - target.y) / -g);
+        float totalTime = timeUp + timeDown;
+
+        Vector3 velocityXZ = toTargetXZ / Mathf.Max(0.01f, totalTime);
+        float velocityY = -g * timeUp;
+
         return velocityXZ + Vector3.up * velocityY;
     }
+
+
 
     private bool CanPassToTarget(Transform target)
     {
@@ -691,5 +699,45 @@ public class PlayerController : MonoBehaviour
         }
 
         return true;
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        // elak error bila belum start
+        if (!enabled) return;
+
+        Gizmos.color = Color.cyan;
+
+        Vector3 origin = transform.position + Vector3.up * 0.1f;
+        Vector3 forward = transform.forward;
+
+        // Garis tengah (arah player)
+        Gizmos.DrawLine(origin, origin + forward * passMaxDistance);
+
+        // Kira arah kiri & kanan berdasarkan passMaxAngle
+        Quaternion leftRot = Quaternion.AngleAxis(-passMaxAngle, Vector3.up);
+        Quaternion rightRot = Quaternion.AngleAxis(passMaxAngle, Vector3.up);
+
+        Vector3 leftDir = leftRot * forward;
+        Vector3 rightDir = rightRot * forward;
+
+        // Garis cone kiri & kanan
+        Gizmos.DrawLine(origin, origin + leftDir * passMaxDistance);
+        Gizmos.DrawLine(origin, origin + rightDir * passMaxDistance);
+
+        // Optional: lukis arc (nampak lebih jelas)
+        int segments = 20;
+        Vector3 prevPoint = origin + leftDir * passMaxDistance;
+
+        for (int i = 1; i <= segments; i++)
+        {
+            float t = i / (float)segments;
+            float angle = Mathf.Lerp(-passMaxAngle, passMaxAngle, t);
+            Vector3 dir = Quaternion.AngleAxis(angle, Vector3.up) * forward;
+            Vector3 point = origin + dir * passMaxDistance;
+
+            Gizmos.DrawLine(prevPoint, point);
+            prevPoint = point;
+        }
     }
 }

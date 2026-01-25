@@ -18,7 +18,9 @@ public class ThrowableObject : MonoBehaviour
     {
         rb = GetComponent<Rigidbody>();
         col = GetComponent<Collider>();
+
     }
+
 
     public void OnPickedUp(Transform hand, PlayerController owner)
     {

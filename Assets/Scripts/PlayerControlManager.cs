@@ -5,6 +5,8 @@ public class PlayerControlManager : MonoBehaviour
 {
     public static PlayerControlManager Instance { get; private set; }
 
+    public PlayerController ActivePlayer => activePlayer;
+
     private readonly List<PlayerController> players = new();
     private PlayerController activePlayer;
 
