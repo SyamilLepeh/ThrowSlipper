@@ -1020,6 +1020,10 @@ PrefabInstance:
       value: UpperCatch
       objectReference: {fileID: 0}
     - target: {fileID: 2542063496587159941, guid: 62868cd0f4b91a9458b208d2d3dedc66, type: 3}
+      propertyPath: maxAimYaw
+      value: 60
+      objectReference: {fileID: 0}
+    - target: {fileID: 2542063496587159941, guid: 62868cd0f4b91a9458b208d2d3dedc66, type: 3}
       propertyPath: rightHand
       value: 
       objectReference: {fileID: 327038853}
@@ -1031,6 +1035,10 @@ PrefabInstance:
       propertyPath: passTarget
       value: 
       objectReference: {fileID: 503959104}
+    - target: {fileID: 2542063496587159941, guid: 62868cd0f4b91a9458b208d2d3dedc66, type: 3}
+      propertyPath: throwAction
+      value: 
+      objectReference: {fileID: -2099379676528639254, guid: 052faaac586de48259a63d0c4782560b, type: 3}
     - target: {fileID: 2542063496587159941, guid: 62868cd0f4b91a9458b208d2d3dedc66, type: 3}
       propertyPath: maxHoldPower
       value: 1

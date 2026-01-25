@@ -8,6 +8,9 @@ public class PlayerController : MonoBehaviour
     [HideInInspector] public Animator animator;
     private Rigidbody rb;
 
+    [Header("PickUp Area Reference")]
+    public Collider pickUpAreaCollider; // drag collider PickUpArea (PickUpTrigger) sini
+
     [Header("Movement Settings")]
     public float acceleration = 60.0f;
     public float deceleration = 30.0f;
@@ -19,7 +22,8 @@ public class PlayerController : MonoBehaviour
     [Header("Input Actions")]
     public InputActionReference moveAction;
     public InputActionReference runAction;
-    public InputActionReference throwAction;
+    public InputActionReference throwAction;   // PASS
+    public InputActionReference attackAction;  // ATTACK/SHOOT (forward)
 
     [Header("Object Handling")]
     public ThrowableObject heldObject;
@@ -32,43 +36,58 @@ public class PlayerController : MonoBehaviour
     public Transform passTarget;
     public Transform passTargetCatchPoint;
 
-    [Header("Pass Power (DEBUG)")]
-    public float maxPassPower = 1.5f;
-    public float minPassPower = 0.2f;
-    public float passChargeSpeed = 1f;
-
     [Header("Pass Aim Rules")]
-    public float passMaxAngle = 35f;      // cone aim (contoh sukan: 25-45 deg)
-    public float passMaxDistance = 50f;   // jarak max pass
+    public float passMaxAngle = 35f;
+    public float passMaxDistance = 50f;
     public bool requireLineOfSight = false;
-    public LayerMask lineOfSightMask = ~0; // optional
+    public LayerMask lineOfSightMask = ~0;
 
     [Header("Pass Feel (Tap vs Hold)")]
-    public float tapThreshold = 0.15f;        // bawah ni kira "tap"
-    public float fullChargeTime = 0.9f;       // hold sampai max
+    public float tapThreshold = 0.15f;
+    public float fullChargeTime = 0.9f;
 
-    public float tapPower = 0.35f;            // kuasa bila tap
-    public float minHoldPower = 0.35f;        // kuasa minimum bila hold (biasanya sama tap)
-    public float maxHoldPower = 1.5f;         // kuasa max
+    public float tapPower = 0.35f;
+    public float minHoldPower = 0.35f;
+    public float maxHoldPower = 1.5f;
 
-    public float slowPassTime = 0.85f;        // tap: masa sampai target (slow tapi logik)
-    public float fastPassTime = 0.45f;        // hold: masa sampai target (laju)
+    public float slowPassTime = 0.85f;
+    public float fastPassTime = 0.45f;
 
     public AnimationCurve chargeCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
 
-    [Header("Upper Aim (Shoulder Only)")]
-    public Transform rightShoulder;     // assign: RightShoulder (Humanoid)
-    public float aimTurnSpeed = 10f;
-    public float maxAimYaw = 35f;       // jangan over twist
-    private Quaternion shoulderDefaultLocalRot;
+    [Header("Pass Distance (Tap vs Hold)")]
+    public float tapMaxPassDistance = 10f;   // TAP: pendek sahaja
+    public float holdMaxPassDistance = 28f;  // HOLD: panjang (<= passMaxDistance)
 
+    [Header("Attack Throw Feel")]
+    public float attackTapPower = 0.55f;
+    public float attackMinHoldPower = 0.55f;
+    public float attackMaxHoldPower = 1.8f;
+
+    public float attackSlowTime = 0.70f;
+    public float attackFastTime = 0.40f;
+
+    public float attackForwardHeight = 1.2f;
+    public float attackForwardMinDist = 10f;
+    public float attackForwardMaxDist = 22f;
+
+    // PASS charge state
     private float chargeStartTime = 0f;
     private float finalPassPower = 1f;
     private float finalPassTime = 0.8f;
-
+    private float finalPassCharge01 = 0f;   // penting untuk jarak tap vs hold
     private float currentPassPower = 0f;
     private bool isChargingPass = false;
     private bool passPowerLocked = false;
+
+    // ATTACK charge state
+    private bool isChargingAttack = false;
+    private bool attackPowerLocked = false;
+    private float attackChargeStartTime = 0f;
+    private float finalAttackPower = 1f;
+    private float finalAttackTime = 0.6f;
+    private float finalAttackCharge01 = 0f;
+    private bool doAttackThrow = false;
 
     [HideInInspector] public bool canPickUp = false;
     [HideInInspector] public bool recentlyThrew = false;
@@ -80,7 +99,6 @@ public class PlayerController : MonoBehaviour
 
     private bool canProcessThrow = false;
     private bool isTurningToPassTarget = false;
-    private float passTurnSpeed = 12f;
 
     private int SpeedHash;
     private int IsThrowingHash;
@@ -94,20 +112,25 @@ public class PlayerController : MonoBehaviour
     private bool isThrowingFullBody = false;
     private bool isTakingFullBody = false;
 
+    // AimLayer (Additive)
+    private int IsAimingHash;
+    private int aimLayerIndex = -1;
+    private float aimLayerWeight = 0f;
+    private bool wantAim = false;
+
     private float throwLayerWeight = 0f;
     private float takeLayerWeight = 0f;
     private float catchLayerWeight = 0f;
-    private int throwLayerIndex;
-    private int takeLayerIndex;
-    private int catchLayerIndex;
+    private int throwLayerIndex = -1;
+    private int takeLayerIndex = -1;
+    private int catchLayerIndex = -1;
+
+    private bool isControlActive = true;
 
     private bool canThrow => heldObject != null && canProcessThrow && !isTurningToPassTarget;
 
     void Start()
     {
-        if (rightShoulder != null)
-            shoulderDefaultLocalRot = rightShoulder.localRotation;
-
         animator = GetComponent<Animator>();
         rb = GetComponent<Rigidbody>();
 
@@ -123,37 +146,68 @@ public class PlayerController : MonoBehaviour
         IsCatchingLowerHash = Animator.StringToHash("isCatchingLower");
         IsReadyToCatchHash = Animator.StringToHash("isReadyToCatch");
 
+        IsAimingHash = Animator.StringToHash("isAiming");
+
         throwLayerIndex = animator.GetLayerIndex("ThrowLayer");
         takeLayerIndex = animator.GetLayerIndex("TakeObjectLayer");
         catchLayerIndex = animator.GetLayerIndex("CatchLayer");
+        aimLayerIndex = animator.GetLayerIndex("AimLayer");
 
-        animator.SetLayerWeight(throwLayerIndex, 0f);
-        animator.SetLayerWeight(takeLayerIndex, 0f);
-        animator.SetLayerWeight(catchLayerIndex, 0f);
+        if (throwLayerIndex != -1) animator.SetLayerWeight(throwLayerIndex, 0f);
+        if (takeLayerIndex != -1) animator.SetLayerWeight(takeLayerIndex, 0f);
+        if (catchLayerIndex != -1) animator.SetLayerWeight(catchLayerIndex, 0f);
+        if (aimLayerIndex != -1) animator.SetLayerWeight(aimLayerIndex, 0f);
 
         StartCoroutine(EnableThrowInput());
+
+        // Register to manager
+        PlayerControlManager.Instance?.Register(this);
     }
 
     void OnEnable()
     {
-        moveAction.action.Enable();
-        runAction.action.Enable();
-        throwAction.action.Enable();
+        if (moveAction != null) moveAction.action.Enable();
+        if (runAction != null) runAction.action.Enable();
+        if (throwAction != null) throwAction.action.Enable();
+        if (attackAction != null) attackAction.action.Enable();
     }
 
     void OnDisable()
     {
-        moveAction.action.Disable();
-        runAction.action.Disable();
-        throwAction.action.Disable();
+        if (moveAction != null) moveAction.action.Disable();
+        if (runAction != null) runAction.action.Disable();
+        if (throwAction != null) throwAction.action.Disable();
+        if (attackAction != null) attackAction.action.Disable();
+    }
+
+    // ===== Manager hooks =====
+    public void SetControlActive(bool active)
+    {
+        isControlActive = active;
+
+        if (!active)
+        {
+            animator.SetFloat(SpeedHash, 0f);
+        }
+    }
+
+    public void SetPickUpAreaEnabled(bool enabled)
+    {
+        if (pickUpAreaCollider != null)
+            pickUpAreaCollider.enabled = enabled;
     }
 
     void Update()
     {
-        Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
-        bool runPressed = runAction.action.IsPressed();
-        bool throwHeld = throwAction.action.IsPressed();
-        bool throwReleased = throwAction.action.WasReleasedThisFrame();
+        // Untuk inactive player, input kosong (supaya tak trigger pass/attack)
+        Vector2 moveInput = isControlActive && moveAction != null ? moveAction.action.ReadValue<Vector2>() : Vector2.zero;
+        bool runPressed = isControlActive && runAction != null && runAction.action.IsPressed();
+
+        bool passHeld = isControlActive && throwAction != null && throwAction.action.IsPressed();
+        bool passReleased = isControlActive && throwAction != null && throwAction.action.WasReleasedThisFrame();
+
+        bool attackHeld = isControlActive && attackAction != null && attackAction.action.IsPressed();
+        bool attackReleased = isControlActive && attackAction != null && attackAction.action.WasReleasedThisFrame();
 
         float currentMaxVelocity = runPressed ? maximumRunVelocity : maximumWalkVelocity;
 
@@ -164,23 +218,36 @@ public class PlayerController : MonoBehaviour
         // Speed
         float targetSpeed = moveInput.magnitude * currentMaxVelocity;
         float currentSpeed = animator.GetFloat(SpeedHash);
+
         if (!isThrowingFullBody && !isTakingFullBody)
         {
-            currentSpeed = Mathf.MoveTowards(currentSpeed, targetSpeed,
-                (Mathf.Abs(targetSpeed) > currentSpeed ? acceleration : deceleration) * Time.deltaTime);
+            currentSpeed = Mathf.MoveTowards(
+                currentSpeed,
+                targetSpeed,
+                (Mathf.Abs(targetSpeed) > currentSpeed ? acceleration : deceleration) * Time.deltaTime
+            );
             animator.SetFloat(SpeedHash, currentSpeed);
         }
-        else animator.SetFloat(SpeedHash, 0f);
-
-        // Rotation
-        if (moveInput != Vector2.zero && !isThrowingFullBody && !isTakingFullBody)
+        else
         {
-            Vector3 direction = new Vector3(moveInput.x, 0, moveInput.y);
-            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(direction), Time.deltaTime * rotationSpeed);
+            animator.SetFloat(SpeedHash, 0f);
         }
 
+        // Rotation (lower body) hanya bila active
+        if (isControlActive && moveInput != Vector2.zero && !isThrowingFullBody && !isTakingFullBody)
+        {
+            Vector3 direction = new Vector3(moveInput.x, 0, moveInput.y);
+            transform.rotation = Quaternion.Slerp(
+                transform.rotation,
+                Quaternion.LookRotation(direction),
+                Time.deltaTime * rotationSpeed
+            );
+        }
+
+        // =====================
         // PASS POWER (Tap vs Hold)
-        if (throwHeld && heldObject != null && canProcessThrow && !passPowerLocked)
+        // =====================
+        if (passHeld && heldObject != null && canProcessThrow && !passPowerLocked && !attackPowerLocked)
         {
             if (!isChargingPass)
             {
@@ -193,52 +260,87 @@ public class PlayerController : MonoBehaviour
             float t = Mathf.Clamp01(heldTime / fullChargeTime);
             float curved = chargeCurve.Evaluate(t);
 
-            // Preview/charging value (optional)
             currentPassPower = Mathf.Lerp(minHoldPower, maxHoldPower, curved);
         }
 
-        if (throwReleased && isChargingPass)
+        if (passReleased && isChargingPass)
         {
             isChargingPass = false;
             passPowerLocked = true;
+            doAttackThrow = false;
 
             float heldTime = Time.time - chargeStartTime;
 
             if (heldTime <= tapThreshold)
             {
-                // ✅ TAP: slow, normal pass (tak terapung lama)
                 finalPassPower = tapPower;
                 finalPassTime = slowPassTime;
+                finalPassCharge01 = 0f; // TAP short
             }
             else
             {
-                // ✅ HOLD: semakin lama, semakin laju & kuat
                 float t = Mathf.Clamp01(heldTime / fullChargeTime);
                 float curved = chargeCurve.Evaluate(t);
 
                 finalPassPower = Mathf.Lerp(minHoldPower, maxHoldPower, curved);
                 finalPassTime = Mathf.Lerp(slowPassTime, fastPassTime, curved);
+                finalPassCharge01 = curved; // HOLD amount
             }
 
-            // ❌ Jangan auto turn (kalau kau ikut aim cone)
             isTurningToPassTarget = false;
+            currentPassPower = finalPassPower;
 
-            currentPassPower = finalPassPower;   // ✅ gunakan power final (tap/hold)
-
-        }
-
-
-
-        // THROW ANIMATION
-        if (passPowerLocked && heldObject != null && canProcessThrow && !isTurningToPassTarget)
-        {
+            // Trigger anim throw
             if (moveInput != Vector2.zero)
                 animator.SetBool(IsThrowingHash, true);
             else
                 animator.SetBool(IsThrowingFullHash, true);
         }
 
-        // AUTO PICK-UP
+        // =====================
+        // ATTACK POWER (Tap vs Hold) - ALWAYS FORWARD
+        // =====================
+        if (attackHeld && heldObject != null && canProcessThrow && !attackPowerLocked && !passPowerLocked)
+        {
+            if (!isChargingAttack)
+            {
+                isChargingAttack = true;
+                attackChargeStartTime = Time.time;
+            }
+        }
+
+        if (attackReleased && isChargingAttack)
+        {
+            isChargingAttack = false;
+            attackPowerLocked = true;
+            doAttackThrow = true;
+
+            float heldTime = Time.time - attackChargeStartTime;
+
+            if (heldTime <= tapThreshold)
+            {
+                finalAttackPower = attackTapPower;
+                finalAttackTime = attackSlowTime;
+                finalAttackCharge01 = 0f;
+            }
+            else
+            {
+                float t = Mathf.Clamp01(heldTime / fullChargeTime);
+                float curved = chargeCurve.Evaluate(t);
+
+                finalAttackPower = Mathf.Lerp(attackMinHoldPower, attackMaxHoldPower, curved);
+                finalAttackTime = Mathf.Lerp(attackSlowTime, attackFastTime, curved);
+                finalAttackCharge01 = curved;
+            }
+
+            // Trigger anim throw
+            if (moveInput != Vector2.zero)
+                animator.SetBool(IsThrowingHash, true);
+            else
+                animator.SetBool(IsThrowingFullHash, true);
+        }
+
+        // AUTO PICK-UP (tak ganggu sebab PickUpArea hanya 1 player ON)
         if (objectToAttach != null && objectToAttach.CanBePickedUpBy(this) &&
             !isCatchingUpperInProgress && !isCatchingLowerInProgress)
         {
@@ -247,23 +349,44 @@ public class PlayerController : MonoBehaviour
             TriggerPickUpAnimation();
         }
 
-        // LAYER BLENDING
-        UpdateLayerWeight(IsThrowingHash, ref throwLayerWeight, throwLayerIndex);
-        UpdateLayerWeight(IsTakeObjectHash, ref takeLayerWeight, takeLayerIndex);
-        UpdateCatchLayerWeight(ref catchLayerWeight, catchLayerIndex);
+        // ===== AIM LAYER (PASS ONLY) =====
+        wantAim =
+            aimLayerIndex != -1 &&
+            heldObject != null &&
+            passTarget != null &&
+            CanPassToTarget(passTarget) &&
+            (isChargingPass || passPowerLocked) &&
+            !isThrowingFullBody && !isTakingFullBody &&
+            !isCatchingUpperInProgress && !isCatchingLowerInProgress &&
+            !doAttackThrow;
+
+        animator.SetBool(IsAimingHash, wantAim);
+
+        // ===== LAYER BLENDING =====
+        if (throwLayerIndex != -1) UpdateLayerWeight(IsThrowingHash, ref throwLayerWeight, throwLayerIndex);
+        if (takeLayerIndex != -1) UpdateLayerWeight(IsTakeObjectHash, ref takeLayerWeight, takeLayerIndex);
+        if (catchLayerIndex != -1) UpdateCatchLayerWeight(ref catchLayerWeight, catchLayerIndex);
+
+        if (aimLayerIndex != -1)
+        {
+            float aimTarget = wantAim ? 1f : 0f;
+            aimLayerWeight = Mathf.MoveTowards(aimLayerWeight, aimTarget, Time.deltaTime * layerBlendSpeed);
+            animator.SetLayerWeight(aimLayerIndex, aimLayerWeight);
+        }
 
         // RESET STATE
-        ResetAnimationState(throwLayerIndex, "Throw_Run", IsThrowingHash);
+        if (throwLayerIndex != -1) ResetAnimationState(throwLayerIndex, "Throw_Run", IsThrowingHash);
         ResetAnimationState(0, "ThrowFullBody", IsThrowingFullHash);
-        ResetAnimationState(takeLayerIndex, "Take_Object", IsTakeObjectHash);
+        if (takeLayerIndex != -1) ResetAnimationState(takeLayerIndex, "Take_Object", IsTakeObjectHash);
         ResetAnimationState(0, "TakeObjectFull", IsTakeObjectFullHash);
     }
 
     void FixedUpdate()
     {
+        if (!isControlActive) return;
         if (isThrowingFullBody || isTakingFullBody) return;
 
-        Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
+        Vector2 moveInput = moveAction != null ? moveAction.action.ReadValue<Vector2>() : Vector2.zero;
         float currentSpeed = animator.GetFloat(SpeedHash);
 
         if (moveInput != Vector2.zero)
@@ -271,36 +394,6 @@ public class PlayerController : MonoBehaviour
             Vector3 direction = new Vector3(moveInput.x, 0, moveInput.y).normalized;
             rb.MovePosition(rb.position + direction * currentSpeed * Time.fixedDeltaTime);
         }
-    }
-
-    private void LateUpdate()
-    {
-        if (!isTurningToPassTarget || passTarget == null) return;
-
-        Vector3 dir = passTarget.position - transform.position;
-        dir.y = 0f;
-
-        if (dir.sqrMagnitude < 0.01f) return;
-
-        Quaternion targetRot = Quaternion.LookRotation(dir);
-        transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, Time.deltaTime * passTurnSpeed);
-
-        float angle = Quaternion.Angle(transform.rotation, targetRot);
-        if (angle < 2f)
-        {
-            isTurningToPassTarget = false;
-
-            AnimatorStateInfo baseState = animator.GetCurrentAnimatorStateInfo(0);
-            if (baseState.IsName("Idle") || baseState.IsName("Walk"))
-            {
-                if (rb.linearVelocity.magnitude > 0.1f)
-                    animator.SetBool(IsThrowingHash, true);
-                else
-                    animator.SetBool(IsThrowingFullHash, true);
-            }
-        }
-
-        HandleShoulderAim();
     }
 
     private IEnumerator EnableThrowInput()
@@ -321,10 +414,7 @@ public class PlayerController : MonoBehaviour
         bool ready = animator.GetBool(IsReadyToCatchHash);
         bool catching = isCatchingUpperInProgress || isCatchingLowerInProgress;
 
-        // CatchLayer aktif jika READY atau sedang CATCH
         float target = (ready || catching) ? 1f : 0f;
-
-        // Blend
         layerWeight = Mathf.MoveTowards(layerWeight, target, Time.deltaTime * layerBlendSpeed);
         animator.SetLayerWeight(layerIndex, layerWeight);
     }
@@ -338,25 +428,6 @@ public class PlayerController : MonoBehaviour
 
         if ((boolHash == IsTakeObjectHash || boolHash == IsTakeObjectFullHash))
             isPickUpInProgress = false;
-    }
-
-    public void ResetCatchAndPickLayers()
-    {
-        isCatchingUpperInProgress = false;
-        isCatchingLowerInProgress = false;
-        catchFreeze = false;
-
-        animator.SetBool(IsReadyToCatchHash, false);
-
-        animator.SetBool(IsTakeObjectHash, false);
-        animator.SetBool(IsTakeObjectFullHash, false);
-        takeLayerWeight = 0f;
-        animator.SetLayerWeight(takeLayerIndex, 0f);
-
-        throwLayerWeight = 0f;
-        animator.SetLayerWeight(throwLayerIndex, 0f);
-        catchLayerWeight = 0f;
-        animator.SetLayerWeight(catchLayerIndex, 0f);
     }
 
     public void TriggerPickUpAnimation()
@@ -379,7 +450,10 @@ public class PlayerController : MonoBehaviour
         obj.ClearReservation();
         objectToAttach = null;
 
-        obj.OnPickedUp(rightHand, this); // RULE EMAS: animation event attach
+        obj.OnPickedUp(rightHand, this);
+
+        // ✅ holder berubah → update PickUpArea rules
+        PlayerControlManager.Instance?.RefreshPickupAreas();
     }
 
     public void AttachNearbyObjectEvent()
@@ -393,14 +467,12 @@ public class PlayerController : MonoBehaviour
     {
         if (obj == null || isCatchingUpperInProgress) return;
 
-        // Matikan ready bila catch bermula
         animator.SetBool(IsReadyToCatchHash, false);
 
         obj.StopMotion();
         objectToAttach = obj;
         isCatchingUpperInProgress = true;
 
-        StartCoroutine(RotateTowardsObject(obj.transform, true));
         TriggerCatchUpper();
     }
 
@@ -408,31 +480,13 @@ public class PlayerController : MonoBehaviour
     {
         if (obj == null || isCatchingLowerInProgress) return;
 
-        // Matikan ready bila catch bermula
         animator.SetBool(IsReadyToCatchHash, false);
 
         obj.StopMotion();
         objectToAttach = obj;
         isCatchingLowerInProgress = true;
 
-        StartCoroutine(RotateTowardsObject(obj.transform, false));
         TriggerCatchLower();
-    }
-
-
-    private IEnumerator RotateTowardsObject(Transform target, bool isUpper)
-    {
-        Vector3 dir = target.position - transform.position;
-        dir.y = 0f;
-        if (dir.sqrMagnitude < 0.01f) yield break;
-
-        Quaternion targetRot = Quaternion.LookRotation(dir);
-        while (Quaternion.Angle(transform.rotation, targetRot) > 1f &&
-              (isUpper ? isCatchingUpperInProgress : isCatchingLowerInProgress))
-        {
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, Time.deltaTime * 8f);
-            yield return null;
-        }
     }
 
     public void TriggerCatchUpper()
@@ -447,110 +501,8 @@ public class PlayerController : MonoBehaviour
         animator.SetTrigger(IsCatchingLowerHash);
     }
 
-    // === THROW FUNCTIONS ===
-    public void ThrowHeldObject(Vector3 velocity, PlayerController target = null)
-    {
-        if (heldObject == null) return;
-
-        heldObject.OnThrown(velocity, target);
-        heldObject = null;
-        objectToAttach = null;
-    }
-
-    public void ReleaseHeldObjectEvent()
-    {
-        if (heldObject == null) return;
-
-        bool doPass = (passTarget != null) && CanPassToTarget(passTarget);
-
-        Vector3 targetPoint;
-        PlayerController teammate = null;
-
-        // 🔒 LOCK power & time (tap / hold)
-        float powerToUse = finalPassPower;
-        float timeToTarget = finalPassTime;
-
-        if (doPass)
-        {
-            targetPoint = passTargetCatchPoint != null
-                ? passTargetCatchPoint.position
-                : passTarget.position + Vector3.up * 1.5f;
-
-            teammate = passTarget.GetComponent<PlayerController>();
-
-            if (teammate != null)
-            {
-                teammate.SetReadyToCatch(true);
-                teammate.StartReadyCatchTimeout(1f);
-            }
-        }
-        else
-        {
-            // guna jarak teammate (XZ) untuk “feel” sama laju macam pass
-            float forwardDist = 10f;
-
-            if (passTarget != null)
-            {
-                Vector3 toT = passTarget.position - transform.position;
-                toT.y = 0f;
-                forwardDist = Mathf.Clamp(toT.magnitude, 6f, passMaxDistance);
-            }
-            else
-            {
-                forwardDist = Mathf.Clamp(passMaxDistance * 0.4f, 6f, passMaxDistance);
-            }
-
-            targetPoint = transform.position
-                + transform.forward * forwardDist
-                + Vector3.up * throwHeight;
-        }
-
-
-        Vector3 velocity =
-            CalculateThrowVelocity(
-                heldObject.transform.position,
-                targetPoint,
-                timeToTarget
-            ) * powerToUse;
-
-        heldObject.OnThrown(velocity, doPass ? teammate : null);
-
-        heldObject = null;
-        canPickUp = false;
-
-        animator.SetBool(IsThrowingHash, false);
-        animator.SetBool(IsThrowingFullHash, false);
-
-        canProcessThrow = false;
-        StartCoroutine(EnableThrowInput());
-        StartCoroutine(ThrowCooldown());
-
-        // reset
-        finalPassPower = 1f;
-        finalPassTime = throwTime;
-        passPowerLocked = false;
-    }
-
-
-
-    private IEnumerator ThrowCooldown()
-    {
-        recentlyThrew = true;
-        yield return new WaitForSeconds(0.3f);
-        recentlyThrew = false;
-    }
-
-    private Vector3 CalculateThrowVelocity(Vector3 origin, Vector3 target, float timeToTarget)
-    {
-        Vector3 displacementXZ = new Vector3(target.x - origin.x, 0, target.z - origin.z);
-        Vector3 velocityXZ = displacementXZ / timeToTarget;
-        float velocityY = (target.y - origin.y) / timeToTarget - 0.5f * Physics.gravity.y * timeToTarget;
-        return velocityXZ + Vector3.up * velocityY;
-    }
-
     public void SetReadyToCatch(bool ready)
     {
-        // Jangan tunjuk ready kalau sedang catch / pickup / anim full body
         if (isPickUpInProgress || isCatchingUpperInProgress || isCatchingLowerInProgress || isThrowingFullBody || isTakingFullBody)
             ready = false;
 
@@ -570,7 +522,6 @@ public class PlayerController : MonoBehaviour
         float t = 0f;
         while (t < seconds)
         {
-            // Kalau catch dah start / attach dah berlaku, stop timeout
             if (isCatchingUpperInProgress || isCatchingLowerInProgress || heldObject != null)
                 yield break;
 
@@ -581,16 +532,136 @@ public class PlayerController : MonoBehaviour
         SetReadyToCatch(false);
     }
 
-    public void EndCatchUpperEvent()
-    {
-        isCatchingUpperInProgress = false;
+    public void EndCatchUpperEvent() => isCatchingUpperInProgress = false;
+    public void EndCatchLowerEvent() => isCatchingLowerInProgress = false;
 
-        // bila catch habis, biar layer turun semula (UpdateCatchLayerWeight akan handle)
+    // Animation Event: release ball/slipper here
+    public void ReleaseHeldObjectEvent()
+    {
+        if (heldObject == null) return;
+
+        bool isAttack = doAttackThrow && attackPowerLocked;
+
+        // PASS "short vs long" distance gating
+        bool doPass = false;
+        if (!isAttack && passTarget != null && CanPassToTarget(passTarget))
+        {
+            float distToTarget = Vector3.Distance(transform.position, passTarget.position);
+
+            float allowedDist = Mathf.Lerp(
+                tapMaxPassDistance,
+                Mathf.Min(holdMaxPassDistance, passMaxDistance),
+                finalPassCharge01
+            );
+
+            if (distToTarget <= allowedDist)
+                doPass = true;
+        }
+
+        Vector3 targetPoint;
+        PlayerController teammate = null;
+
+        float powerToUse;
+        float timeToTarget;
+
+        if (isAttack)
+        {
+            powerToUse = finalAttackPower;
+            timeToTarget = finalAttackTime;
+
+            float dist = Mathf.Lerp(attackForwardMinDist, attackForwardMaxDist, finalAttackCharge01);
+            targetPoint = transform.position + transform.forward * dist + Vector3.up * attackForwardHeight;
+        }
+        else
+        {
+            powerToUse = finalPassPower;
+            timeToTarget = finalPassTime;
+
+            if (doPass)
+            {
+                targetPoint = passTargetCatchPoint != null
+                    ? passTargetCatchPoint.position
+                    : passTarget.position + Vector3.up * 1.5f;
+
+                teammate = passTarget.GetComponent<PlayerController>();
+                if (teammate != null)
+                {
+                    teammate.SetReadyToCatch(true);
+                    teammate.StartReadyCatchTimeout(1f);
+
+                    // ✅ SWITCH CONTROL NOW (bola masih terbang)
+                    PlayerControlManager.Instance?.SwitchTo(teammate);
+                }
+            }
+            else
+            {
+                // forward fallback (same feel)
+                float forwardDist = 10f;
+
+                if (passTarget != null)
+                {
+                    Vector3 toT = passTarget.position - transform.position;
+                    toT.y = 0f;
+                    forwardDist = Mathf.Clamp(toT.magnitude, 6f, passMaxDistance);
+                }
+                else
+                {
+                    forwardDist = Mathf.Clamp(passMaxDistance * 0.4f, 6f, passMaxDistance);
+                }
+
+                targetPoint = transform.position + transform.forward * forwardDist + Vector3.up * throwHeight;
+            }
+        }
+
+        Vector3 velocity = CalculateThrowVelocity(heldObject.transform.position, targetPoint, timeToTarget) * powerToUse;
+
+        heldObject.OnThrown(velocity, doPass ? teammate : null);
+
+        // ✅ ownership berubah → refresh pickup areas
+        PlayerControlManager.Instance?.RefreshPickupAreas();
+
+        heldObject = null;
+        canPickUp = false;
+
+        animator.SetBool(IsThrowingHash, false);
+        animator.SetBool(IsThrowingFullHash, false);
+
+        canProcessThrow = false;
+        StartCoroutine(EnableThrowInput());
+        StartCoroutine(ThrowCooldown());
+
+        // reset PASS
+        finalPassPower = 1f;
+        finalPassTime = throwTime;
+        finalPassCharge01 = 0f;
+        passPowerLocked = false;
+        isChargingPass = false;
+
+        // reset ATTACK
+        finalAttackPower = 1f;
+        finalAttackTime = 0.6f;
+        finalAttackCharge01 = 0f;
+        attackPowerLocked = false;
+        isChargingAttack = false;
+        doAttackThrow = false;
+
+        // ✅ confirm refresh selepas clear
+        PlayerControlManager.Instance?.RefreshPickupAreas();
     }
 
-    public void EndCatchLowerEvent()
+    private IEnumerator ThrowCooldown()
     {
-        isCatchingLowerInProgress = false;
+        recentlyThrew = true;
+        yield return new WaitForSeconds(0.3f);
+        recentlyThrew = false;
+    }
+
+    private Vector3 CalculateThrowVelocity(Vector3 origin, Vector3 target, float timeToTarget)
+    {
+        Vector3 displacementXZ = new Vector3(target.x - origin.x, 0, target.z - origin.z);
+        Vector3 velocityXZ = displacementXZ / timeToTarget;
+        float velocityY = (target.y - origin.y) / timeToTarget - 0.5f * Physics.gravity.y * timeToTarget;
+        return velocityXZ + Vector3.up * velocityY;
     }
 
     private bool CanPassToTarget(Transform target)
@@ -603,7 +674,7 @@ public class PlayerController : MonoBehaviour
         float dist = toTarget.magnitude;
         if (dist < 0.01f || dist > passMaxDistance) return false;
 
-        Vector3 dir = toTarget / dist; // normalized
+        Vector3 dir = toTarget / dist;
         float angle = Vector3.Angle(transform.forward, dir);
         if (angle > passMaxAngle) return false;
 
@@ -611,9 +682,9 @@ public class PlayerController : MonoBehaviour
         {
             Vector3 origin = transform.position + Vector3.up * 1.2f;
             Vector3 dest = target.position + Vector3.up * 1.2f;
+
             if (Physics.Linecast(origin, dest, out RaycastHit hit, lineOfSightMask))
             {
-                // kalau hit sesuatu sebelum target, tak boleh pass
                 if (hit.transform != target && !hit.transform.IsChildOf(target))
                     return false;
             }
@@ -621,82 +692,4 @@ public class PlayerController : MonoBehaviour
 
         return true;
     }
-
-    private void OnDrawGizmosSelected()
-    {
-        // elak error bila belum start
-        if (!enabled) return;
-
-        Gizmos.color = Color.cyan;
-
-        Vector3 origin = transform.position + Vector3.up * 0.1f;
-        Vector3 forward = transform.forward;
-
-        // Garis tengah (arah player)
-        Gizmos.DrawLine(origin, origin + forward * passMaxDistance);
-
-        // Kira arah kiri & kanan berdasarkan passMaxAngle
-        Quaternion leftRot = Quaternion.AngleAxis(-passMaxAngle, Vector3.up);
-        Quaternion rightRot = Quaternion.AngleAxis(passMaxAngle, Vector3.up);
-
-        Vector3 leftDir = leftRot * forward;
-        Vector3 rightDir = rightRot * forward;
-
-        // Garis cone kiri & kanan
-        Gizmos.DrawLine(origin, origin + leftDir * passMaxDistance);
-        Gizmos.DrawLine(origin, origin + rightDir * passMaxDistance);
-
-        // Optional: lukis arc (nampak lebih jelas)
-        int segments = 20;
-        Vector3 prevPoint = origin + leftDir * passMaxDistance;
-
-        for (int i = 1; i <= segments; i++)
-        {
-            float t = i / (float)segments;
-            float angle = Mathf.Lerp(-passMaxAngle, passMaxAngle, t);
-            Vector3 dir = Quaternion.AngleAxis(angle, Vector3.up) * forward;
-            Vector3 point = origin + dir * passMaxDistance;
-
-            Gizmos.DrawLine(prevPoint, point);
-            prevPoint = point;
-        }
-    }
-
-    void HandleShoulderAim()
-    {
-        if (rightShoulder == null) return;
-
-        // aim hanya bila ada heldObject + pass valid + sedang throw charge / locked
-        if (heldObject == null || passTarget == null) { ResetShoulderAim(); return; }
-        if (!CanPassToTarget(passTarget)) { ResetShoulderAim(); return; }
-
-        Vector3 toT = passTarget.position - transform.position;
-        toT.y = 0f;
-        if (toT.sqrMagnitude < 0.01f) { ResetShoulderAim(); return; }
-
-        // target yaw relative to player forward
-        float yaw = Vector3.SignedAngle(transform.forward, toT.normalized, Vector3.up);
-        yaw = Mathf.Clamp(yaw, -maxAimYaw, maxAimYaw);
-
-        Quaternion targetLocal = shoulderDefaultLocalRot * Quaternion.Euler(0f, yaw, 0f);
-
-        rightShoulder.localRotation = Quaternion.Slerp(
-            rightShoulder.localRotation,
-            targetLocal,
-            Time.deltaTime * aimTurnSpeed
-        );
-    }
-
-    void ResetShoulderAim()
-    {
-        if (rightShoulder == null) return;
-        rightShoulder.localRotation = Quaternion.Slerp(
-            rightShoulder.localRotation,
-            shoulderDefaultLocalRot,
-            Time.deltaTime * aimTurnSpeed
-        );
-    }
-
-
-
 }
