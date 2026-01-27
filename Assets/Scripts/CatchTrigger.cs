@@ -26,6 +26,7 @@ public class CatchTrigger : MonoBehaviour
         if (obj.passTarget != playerController) return;
 
         // Stop object
+        obj.CancelGuidedPass();
         obj.StopMotion();
 
         // Simpan untuk attach (Animation Event akan attach)

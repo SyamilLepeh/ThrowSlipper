@@ -41,8 +41,6 @@ public class PlayerController : MonoBehaviour
     public float arcMaxDistance = 30f;  // jarak yang dianggap "jauh" untuk cap
     public AnimationCurve arcByDistance = AnimationCurve.EaseInOut(0, 0, 1, 1);
 
-
-
     [Header("Passing System")]
     public Transform passTarget;
     public Transform passTargetCatchPoint;
@@ -52,6 +50,9 @@ public class PlayerController : MonoBehaviour
     public float passMaxDistance = 50f;
     public bool requireLineOfSight = false;
     public LayerMask lineOfSightMask = ~0;
+
+    public bool cancelPassIfInvalid = true; // ✅ ADD
+
 
     [Header("Pass Feel (Tap vs Hold)")]
     public float tapThreshold = 0.15f;
@@ -81,6 +82,18 @@ public class PlayerController : MonoBehaviour
     public float attackForwardHeight = 1.2f;
     public float attackForwardMinDist = 10f;
     public float attackForwardMaxDist = 22f;
+
+    [Header("Auto Receive Assist (Pass)")]
+    public bool enableAutoReceiveAssist = true;
+    public float autoReceiveSeconds = 0.55f;          // berapa lama auto chase
+    public float autoReceiveStopDistance = 0.75f;      // berhenti bila dekat
+    public float autoReceiveSpeedMultiplier = 1.15f;   // laju sedikit dari walk
+    public bool cancelAssistOnInput = true;            // player boleh cancel dengan input
+
+    [Header("Catch FailSafe")]
+    public float catchFailSafeSeconds = 1.2f;
+    private Coroutine catchFailSafeCo;
+
 
     // PASS charge state
     private float chargeStartTime = 0f;
@@ -129,6 +142,11 @@ public class PlayerController : MonoBehaviour
     private int throwLayerIndex = -1;
     private int takeLayerIndex = -1;
     private int catchLayerIndex = -1;
+
+    private bool autoReceiveActive = false;
+    private float autoReceiveEndTime = 0f;
+    private Transform autoReceiveTargetTf;
+    private Vector3 autoReceiveTargetPoint;
 
     private bool isControlActive = true;
 
@@ -367,14 +385,63 @@ public class PlayerController : MonoBehaviour
         if (!isControlActive) return;
         if (isThrowingFullBody || isTakingFullBody) return;
 
+        // input normal
         Vector2 moveInput = moveAction != null ? moveAction.action.ReadValue<Vector2>() : Vector2.zero;
-        float currentSpeed = animator.GetFloat(SpeedHash);
 
-        if (moveInput != Vector2.zero)
+        // ✅ cancel assist kalau player gerakkan input (optional)
+        if (autoReceiveActive && cancelAssistOnInput && moveInput.sqrMagnitude > 0.25f)
         {
-            Vector3 direction = new Vector3(moveInput.x, 0, moveInput.y).normalized;
-            rb.MovePosition(rb.position + direction * currentSpeed * Time.fixedDeltaTime);
+            StopAutoReceiveAssist();
         }
+
+        // pilih direction: assist atau input
+        Vector3 moveDir = Vector3.zero;
+
+        if (autoReceiveActive)
+        {
+            if (Time.time > autoReceiveEndTime)
+            {
+                StopAutoReceiveAssist();
+            }
+            else
+            {
+                Vector3 target = autoReceiveTargetTf != null ? autoReceiveTargetTf.position : autoReceiveTargetPoint;
+                Vector3 to = target - transform.position;
+                to.y = 0f;
+
+                if (to.magnitude <= autoReceiveStopDistance)
+                {
+                    StopAutoReceiveAssist();
+                }
+                else
+                {
+                    moveDir = to.normalized;
+
+                    // face target
+                    transform.rotation = Quaternion.Slerp(
+                        transform.rotation,
+                        Quaternion.LookRotation(moveDir),
+                        Time.fixedDeltaTime * rotationSpeed
+                    );
+                }
+            }
+        }
+
+        // kalau assist tak aktif, guna input biasa
+        if (moveDir == Vector3.zero && moveInput != Vector2.zero)
+        {
+            moveDir = new Vector3(moveInput.x, 0, moveInput.y).normalized;
+        }
+
+        // gerakkan RB (guna max velocity, bukan animator speed, sebab assist perlu stabil)
+        if (moveDir != Vector3.zero)
+        {
+            float baseSpeed = maximumWalkVelocity; // atau maximumRunVelocity kalau nak
+            float speed = autoReceiveActive ? baseSpeed * autoReceiveSpeedMultiplier : baseSpeed;
+
+            rb.MovePosition(rb.position + moveDir * speed * Time.fixedDeltaTime);
+        }
+
     }
 
     private IEnumerator EnableThrowInput()
@@ -433,9 +500,18 @@ public class PlayerController : MonoBehaviour
 
         obj.OnPickedUp(rightHand, this);
 
+        // ✅ IMPORTANT: clear catch states supaya tak “stack”
+        isCatchingUpperInProgress = false;
+        isCatchingLowerInProgress = false;
+        animator.SetBool(IsReadyToCatchHash, false);
+
+        // optional: stop auto receive bila dah pegang
+        StopAutoReceiveAssist();
+
         // ✅ holder berubah → update PickUpArea rules
         PlayerControlManager.Instance?.RefreshPickupAreas();
     }
+
 
     public void AttachNearbyObjectEvent()
     {
@@ -455,6 +531,7 @@ public class PlayerController : MonoBehaviour
         isCatchingUpperInProgress = true;
 
         TriggerCatchUpper();
+        StartCatchFailSafe();
     }
 
     public void CatchLowerObject(ThrowableObject obj)
@@ -468,6 +545,7 @@ public class PlayerController : MonoBehaviour
         isCatchingLowerInProgress = true;
 
         TriggerCatchLower();
+        StartCatchFailSafe();
     }
 
     public void TriggerCatchUpper()
@@ -481,6 +559,19 @@ public class PlayerController : MonoBehaviour
         animator.ResetTrigger(IsCatchingUpperHash);
         animator.SetTrigger(IsCatchingLowerHash);
     }
+
+    public void EndCatchUpperEvent()
+    {
+        isCatchingUpperInProgress = false;
+        animator.SetBool(IsReadyToCatchHash, false);
+    }
+
+    public void EndCatchLowerEvent()
+    {
+        isCatchingLowerInProgress = false;
+        animator.SetBool(IsReadyToCatchHash, false);
+    }
+
 
     public void SetReadyToCatch(bool ready)
     {
@@ -513,9 +604,6 @@ public class PlayerController : MonoBehaviour
         SetReadyToCatch(false);
     }
 
-    public void EndCatchUpperEvent() => isCatchingUpperInProgress = false;
-    public void EndCatchLowerEvent() => isCatchingLowerInProgress = false;
-
     // Animation Event: release ball/slipper here
     public void ReleaseHeldObjectEvent()
     {
@@ -525,7 +613,15 @@ public class PlayerController : MonoBehaviour
 
         // PASS "short vs long" distance gating
         bool doPass = false;
-        if (!isAttack && passTarget != null && CanPassToTarget(passTarget))
+
+        // ✅ aim direction based on player's intent (move input) for stable angle check
+        Vector2 aimInput = Vector2.zero;
+        if (isControlActive && moveAction != null)
+            aimInput = moveAction.action.ReadValue<Vector2>();
+
+        Vector3 aimForward = GetAimForward(aimInput);
+
+        if (!isAttack && passTarget != null && CanPassToTarget(passTarget, aimForward))
         {
             float distToTarget = Vector3.Distance(transform.position, passTarget.position);
 
@@ -538,6 +634,7 @@ public class PlayerController : MonoBehaviour
             if (distToTarget <= allowedDist)
                 doPass = true;
         }
+
 
         Vector3 targetPoint;
         PlayerController teammate = null;
@@ -571,11 +668,31 @@ public class PlayerController : MonoBehaviour
 
                     // ✅ SWITCH CONTROL NOW (bola masih terbang)
                     PlayerControlManager.Instance?.SwitchTo(teammate);
+
+                    Transform catchTf = passTargetCatchPoint != null ? passTargetCatchPoint : passTarget;
+                    teammate.StartAutoReceiveAssist(catchTf, targetPoint);
                 }
             }
             else
             {
-                // ✅ forward fallback bila tak boleh pass (ikut jarak ke passTarget kalau ada)
+                if (cancelPassIfInvalid)
+                {
+                    // ✅ Cancel PASS throw completely (Aim Rules terasa jelas)
+                    passPowerLocked = false;
+                    isChargingPass = false;
+
+                    // reset anim flags (kalau sedang set)
+                    animator.SetBool(IsThrowingHash, false);
+                    animator.SetBool(IsThrowingFullHash, false);
+
+                    // allow input again
+                    canProcessThrow = false;
+                    StartCoroutine(EnableThrowInput());
+
+                    return;
+                }
+
+                // (Optional) kalau kau tetap nak ada fallback, letak code lama sini
                 float forwardDist;
 
                 if (passTarget != null)
@@ -591,15 +708,32 @@ public class PlayerController : MonoBehaviour
 
                 targetPoint = transform.position + transform.forward * forwardDist;
             }
+
         }
 
-        // ✅ ARC THROW (apply untuk PASS & ATTACK)
-        Vector3 velocity =
-            CalculateThrowVelocityArc(heldObject.transform.position, targetPoint, throwHeight)
-            * powerToUse
-            * objectThrowSpeed;
+        if (doPass && teammate != null)
+        {
+            // ✅ guarantee sampai ke catch point teammate
+            Transform catchTf = passTargetCatchPoint != null ? passTargetCatchPoint : passTarget;
 
-        heldObject.OnThrown(velocity, doPass ? teammate : null);
+            float dist = Vector3.Distance(heldObject.transform.position, targetPoint);
+
+            // duration ikut jarak & speed (tune sini)
+            float duration = Mathf.Clamp(dist / (14f * objectThrowSpeed), 0.18f, 0.55f);
+
+            heldObject.StartGuidedPass(catchTf, duration, throwHeight, teammate);
+        }
+        else
+        {
+            // ✅ projectile normal (attack / fallback)
+            Vector3 velocity =
+                CalculateThrowVelocityArc(heldObject.transform.position, targetPoint, throwHeight)
+                * powerToUse
+                * objectThrowSpeed;
+
+            heldObject.OnThrown(velocity, null);
+        }
+
 
         // ✅ ownership berubah → refresh pickup areas
         PlayerControlManager.Instance?.RefreshPickupAreas();
@@ -670,9 +804,7 @@ public class PlayerController : MonoBehaviour
         return velocityXZ + Vector3.up * velocityY;
     }
 
-
-
-    private bool CanPassToTarget(Transform target)
+    private bool CanPassToTarget(Transform target, Vector3 aimForward)
     {
         if (target == null) return false;
 
@@ -683,7 +815,8 @@ public class PlayerController : MonoBehaviour
         if (dist < 0.01f || dist > passMaxDistance) return false;
 
         Vector3 dir = toTarget / dist;
-        float angle = Vector3.Angle(transform.forward, dir);
+
+        float angle = Vector3.Angle(aimForward, dir);
         if (angle > passMaxAngle) return false;
 
         if (requireLineOfSight)
@@ -700,6 +833,24 @@ public class PlayerController : MonoBehaviour
 
         return true;
     }
+
+
+    private Vector3 GetAimForward(Vector2 moveInput)
+    {
+        // default: arah badan
+        Vector3 fwd = transform.forward;
+
+        // kalau ada input move, guna arah input sebagai niat aim
+        if (moveInput.sqrMagnitude > 0.001f)
+        {
+            Vector3 dir = new Vector3(moveInput.x, 0f, moveInput.y);
+            if (dir.sqrMagnitude > 0.001f)
+                fwd = dir.normalized;
+        }
+
+        return fwd;
+    }
+
 
     private void OnDrawGizmosSelected()
     {
@@ -740,4 +891,54 @@ public class PlayerController : MonoBehaviour
             prevPoint = point;
         }
     }
+
+    public void StartAutoReceiveAssist(Transform targetTf, Vector3 fallbackPoint)
+    {
+        if (!enableAutoReceiveAssist) return;
+
+        autoReceiveTargetTf = targetTf;
+        autoReceiveTargetPoint = fallbackPoint;
+
+        autoReceiveActive = true;
+        autoReceiveEndTime = Time.time + autoReceiveSeconds;
+
+        // optional: buat ready-to-catch kekal
+        SetReadyToCatch(true);
+    }
+
+    private void StopAutoReceiveAssist()
+    {
+        autoReceiveActive = false;
+        autoReceiveTargetTf = null;
+    }
+
+    private void StartCatchFailSafe()
+    {
+        if (catchFailSafeCo != null) StopCoroutine(catchFailSafeCo);
+        catchFailSafeCo = StartCoroutine(CatchFailSafe());
+    }
+
+    private IEnumerator CatchFailSafe()
+    {
+        yield return new WaitForSeconds(catchFailSafeSeconds);
+
+        // kalau masih stuck dalam catch mode & belum pegang object, reset
+        if ((isCatchingUpperInProgress || isCatchingLowerInProgress) && heldObject == null)
+        {
+            isCatchingUpperInProgress = false;
+            isCatchingLowerInProgress = false;
+            animator.SetBool(IsReadyToCatchHash, false);
+
+            // kalau ada objectToAttach tapi catch gagal, lepaskan supaya pickup normal boleh berlaku
+            if (objectToAttach != null)
+            {
+                objectToAttach.ClearReservation();
+                objectToAttach = null;
+            }
+
+            canPickUp = false;
+            PlayerControlManager.Instance?.RefreshPickupAreas();
+        }
+    }
+
 }
