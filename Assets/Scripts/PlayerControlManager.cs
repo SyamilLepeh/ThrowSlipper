@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -69,4 +70,19 @@ public class PlayerControlManager : MonoBehaviour
             p.SetPickUpAreaEnabled(enable);
         }
     }
+
+    public void ForceEnablePickupFor(PlayerController p, float seconds)
+    {
+        StartCoroutine(ForcePickupCo(p, seconds));
+    }
+
+    private IEnumerator ForcePickupCo(PlayerController p, float seconds)
+    {
+        if (p == null) yield break;
+
+        p.SetPickUpAreaEnabled(true);
+        yield return new WaitForSeconds(seconds);
+        RefreshPickupAreas();
+    }
+
 }

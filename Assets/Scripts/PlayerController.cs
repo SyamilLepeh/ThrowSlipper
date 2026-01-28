@@ -94,6 +94,10 @@ public class PlayerController : MonoBehaviour
     public float catchFailSafeSeconds = 1.2f;
     private Coroutine catchFailSafeCo;
 
+    [Header("Attach FailSafe")]
+    public float attachFailSafeSeconds = 1.0f;
+    private float objectToAttachSetTime = -999f;
+
 
     // PASS charge state
     private float chargeStartTime = 0f;
@@ -316,6 +320,24 @@ public class PlayerController : MonoBehaviour
                 animator.SetBool(IsThrowingFullHash, true);
         }
 
+        if (objectToAttach != null && heldObject == null)
+        {
+            if (Time.time - objectToAttachSetTime > attachFailSafeSeconds)
+            {
+                // release lock
+                objectToAttach.ClearReservation();
+                objectToAttach = null;
+
+                isPickUpInProgress = false;
+                isCatchingUpperInProgress = false;
+                isCatchingLowerInProgress = false;
+
+                animator.SetBool(IsReadyToCatchHash, false);
+                PlayerControlManager.Instance?.RefreshPickupAreas();
+            }
+        }
+
+
         // =====================
         // ATTACK POWER (Tap vs Hold) - ALWAYS FORWARD
         // =====================
@@ -357,15 +379,6 @@ public class PlayerController : MonoBehaviour
                 animator.SetBool(IsThrowingHash, true);
             else
                 animator.SetBool(IsThrowingFullHash, true);
-        }
-
-        // AUTO PICK-UP (tak ganggu sebab PickUpArea hanya 1 player ON)
-        if (objectToAttach != null && objectToAttach.CanBePickedUpBy(this) &&
-            !isCatchingUpperInProgress && !isCatchingLowerInProgress)
-        {
-            objectToAttach.Reserve(this);
-            canPickUp = false;
-            TriggerPickUpAnimation();
         }
 
         // ===== LAYER BLENDING =====
@@ -488,6 +501,8 @@ public class PlayerController : MonoBehaviour
             animator.SetBool(IsTakeObjectHash, true);
         else
             animator.SetBool(IsTakeObjectFullHash, true);
+
+        StartCoroutine(PickupFallback(0.25f));
     }
 
     public void AttachObjectToHand(ThrowableObject obj)
@@ -499,6 +514,8 @@ public class PlayerController : MonoBehaviour
         objectToAttach = null;
 
         obj.OnPickedUp(rightHand, this);
+        isPickUpInProgress = false;
+        canPickUp = false;
 
         // ✅ IMPORTANT: clear catch states supaya tak “stack”
         isCatchingUpperInProgress = false;
@@ -526,12 +543,13 @@ public class PlayerController : MonoBehaviour
 
         animator.SetBool(IsReadyToCatchHash, false);
 
-        obj.StopMotion();
+        obj.SoftStop();
         objectToAttach = obj;
         isCatchingUpperInProgress = true;
 
         TriggerCatchUpper();
         StartCatchFailSafe();
+        StartCoroutine(AttachFallback(0.25f));
     }
 
     public void CatchLowerObject(ThrowableObject obj)
@@ -540,12 +558,13 @@ public class PlayerController : MonoBehaviour
 
         animator.SetBool(IsReadyToCatchHash, false);
 
-        obj.StopMotion();
+        obj.SoftStop();
         objectToAttach = obj;
         isCatchingLowerInProgress = true;
 
         TriggerCatchLower();
         StartCatchFailSafe();
+        StartCoroutine(AttachFallback(0.25f));
     }
 
     public void TriggerCatchUpper()
@@ -668,6 +687,8 @@ public class PlayerController : MonoBehaviour
 
                     // ✅ SWITCH CONTROL NOW (bola masih terbang)
                     PlayerControlManager.Instance?.SwitchTo(teammate);
+
+                    PlayerControlManager.Instance?.ForceEnablePickupFor(teammate, 0.6f);
 
                     Transform catchTf = passTargetCatchPoint != null ? passTargetCatchPoint : passTarget;
                     teammate.StartAutoReceiveAssist(catchTf, targetPoint);
@@ -940,5 +961,34 @@ public class PlayerController : MonoBehaviour
             PlayerControlManager.Instance?.RefreshPickupAreas();
         }
     }
+
+    private IEnumerator AttachFallback(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+
+        // kalau masih dalam catch mode & ada objectToAttach tapi belum attach, attach terus
+        if (heldObject == null && objectToAttach != null &&
+            (isCatchingUpperInProgress || isCatchingLowerInProgress))
+        {
+            AttachObjectToHand(objectToAttach);
+        }
+    }
+
+    private IEnumerator PickupFallback(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+
+        if (heldObject == null && objectToAttach != null && isPickUpInProgress)
+        {
+            AttachObjectToHand(objectToAttach);
+        }
+    }
+
+    public void MarkObjectToAttachTime()
+    {
+        objectToAttachSetTime = Time.time;
+    }
+
+
 
 }

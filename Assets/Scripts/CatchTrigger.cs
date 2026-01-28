@@ -27,10 +27,12 @@ public class CatchTrigger : MonoBehaviour
 
         // Stop object
         obj.CancelGuidedPass();
-        obj.StopMotion();
+        obj.SoftStop();
 
         // Simpan untuk attach (Animation Event akan attach)
         playerController.objectToAttach = obj;
+        playerController.MarkObjectToAttachTime();
+
 
         // Set flag yang sesuai
         if (upperBodyZone)

@@ -908,12 +908,24 @@ PrefabInstance:
       value: 2.75
       objectReference: {fileID: 0}
     - target: {fileID: 4193779214126893798, guid: 475dabded5bd3394791c039de6da98c9, type: 3}
+      propertyPath: maximumRunVelocity
+      value: 18
+      objectReference: {fileID: 0}
+    - target: {fileID: 4193779214126893798, guid: 475dabded5bd3394791c039de6da98c9, type: 3}
       propertyPath: pickUpAreaCollider
       value: 
       objectReference: {fileID: 59205687}
     - target: {fileID: 4193779214126893798, guid: 475dabded5bd3394791c039de6da98c9, type: 3}
+      propertyPath: requireLineOfSight
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4193779214126893798, guid: 475dabded5bd3394791c039de6da98c9, type: 3}
       propertyPath: attackForwardHeight
       value: 1.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 4193779214126893798, guid: 475dabded5bd3394791c039de6da98c9, type: 3}
+      propertyPath: cancelPassIfInvalid
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4193779214126893798, guid: 475dabded5bd3394791c039de6da98c9, type: 3}
       propertyPath: passTargetCatchPoint

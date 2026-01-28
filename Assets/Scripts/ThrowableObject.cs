@@ -149,6 +149,16 @@ public class ThrowableObject : MonoBehaviour
         col.enabled = false;
     }
 
+    public void SoftStop()
+    {
+        // hanya clear velocity kalau masih dynamic
+        if (!rb.isKinematic)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
+        // ❌ jangan set kinematic / jangan disable collider di sini
+    }
 
 
     public bool CanBePickedUpBy(PlayerController player)
